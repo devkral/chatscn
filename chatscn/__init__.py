@@ -77,7 +77,6 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def basedir(self):
         raise NotImplementedError()
-    
 
     def wrap(self):
         cont = default_sslcont()
@@ -128,7 +127,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             self.send_error(400, "invalid type")
             return
         if not self.issensitive():
-            self.send_error(400, "sens level too low")
+            self.send_error(400, "counterpart not sensitive")
             return
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
@@ -177,7 +176,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             self.end_headers()
             self.wfile.write(ob)
             return
-        
+
         splitted = self.path[1:].split("/", 1)
         if len(splitted) == 2 and splitted[0] in {"chat_normal", "chat_private", "chat_sensitive", "send_file"}:
             action = getattr(self, splitted[0], None)

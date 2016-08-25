@@ -15,20 +15,18 @@ def openfoo(modulename, address, use_unix):
     except ImportError:
         return False
 
-
 def open_gui(address, use_unix):
     if openfoo("chatkivy", address, use_unix):
         return
 
 if __name__ == "__main__":
-    print(sys.argv[0])
     if len(sys.argv) == 2:
         if os.path.exists(sys.argv[1]):
             open_gui(sys.argv[1], use_unix=True)
         else:
             open_gui(sys.argv[1], use_unix=False)
     else:
-        p = getlocalclient()
+        p = getlocalclient(cleanupoldfiles=True)
         if not p:
             ret = start.client([], doreturn=True)
             if ret:
