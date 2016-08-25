@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-5.1.dtd">
 <!-- eric project file for project chatscn -->
-<!-- Saved: 2016-08-03, 12:33:37 -->
+<!-- Saved: 2016-08-03, 21:40:28 -->
 <!-- Copyright (C) 2016 alex,  -->
 <Project version="5.1">
   <Language>en_US</Language>
@@ -12,8 +12,12 @@
   <Version>0.1</Version>
   <Author>alex</Author>
   <Email></Email>
+  <Eol index="-1"/>
   <Sources>
-    <Source>__init__.py</Source>
+    <Source>chatscn/__init__.py</Source>
+    <Source>chatscn/__main__.py</Source>
+    <Source>chatscn/chatkivy/__init__.py</Source>
+    <Source>chatscn/chatkivy/chatscn.kv</Source>
   </Sources>
   <Forms/>
   <Translations/>
@@ -22,6 +26,7 @@
   <Others>
     <Other>.gitignore</Other>
   </Others>
+  <MainScript>chatscn/__main__.py</MainScript>
   <Vcs>
     <VcsType>Git</VcsType>
     <VcsOptions>

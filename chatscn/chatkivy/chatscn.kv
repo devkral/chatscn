@@ -1,0 +1,101 @@
+MainWidget:
+    TabbedPanel:
+        pos: 0, 0
+        size: root.width, root.height
+        tab_width: root.width/3
+        tab_pos: "top_left"
+        do_default_tab: False
+        TabbedPanelItem:
+            text: 'Chats'
+            FloatLayout:
+                canvas:
+                    Color:
+                        rgba: 0,0,0,0
+                ScrollView:
+                    pos_hint: {"x": 0, 'y': 0}
+                    size_hint: 0.3, 1
+                    TreeView:
+                        id: "chatfriends"
+                        root_options: {"text": "Chats"}
+
+                ScrollView:
+                    pos_hint: {"x": 0.305, 'y': 0.3}
+                    size_hint: 0.7, 0.7
+                    TreeView:
+                        id: "chatwinhist"
+                        root_options: {"text": ""}
+                TextInput:
+                    pos: 0, 0
+                    pos_hint: {"x": 0.3, 'y': 0.07}
+                    size_hint: 0.7, 0.2
+                BoxLayout:
+                    orientation: 'horizontal'
+                    pos: 0, 0
+                    pos_hint: {"x": 0.3, 'y': 0}
+                    size_hint: 0.7, 0.06
+                    Button:
+                        text: 'Send'
+                    Button:
+                        text: 'Image'
+                    Button:
+                        text: 'Files'
+
+        TabbedPanelItem:
+            text: 'Server & Friends'
+            FloatLayout:
+                canvas:
+                    Color:
+                        rgba: 0,0.1,0,0
+                
+                Label:
+                    text: "Server:"
+                    pos: 0, 0
+                    pos_hint: {"x": 0, 'y': 0.95}
+                    size_hint: 0.1, 0.05
+                BoxLayout:
+                    orientation: 'horizontal'
+                    pos: 0, 0
+                    pos_hint: {"x": 0.1, 'y': 0.95}
+                    size_hint: 0.9, 0.05
+                    TextInput:
+                        text: 
+                        multiline: False
+                    Label:
+                        text: ""
+                        id: "nameserver"
+                
+                ScrollView:
+                    pos: 0, 0
+                    pos_hint: {"x": 0, 'y': 0}
+                    size_hint: 0.5, 0.95
+                    TreeView:
+                        id: "serverlist"
+                        root_options: {"text": "Serverentries"}
+                        
+
+                ScrollView:
+                    pos: 0, 0
+                    pos_hint: {"x": 0.5, 'y': 0}
+                    size_hint: 0.5, 0.95
+                    TreeView:
+                        id: "friendlist"
+                        root_options: {"text": "Friends"}
+        
+        TabbedPanelItem:
+            text: 'Settings'
+            GridLayout:
+                canvas:
+                    Color:
+                        rgba: 0.1,0,0,0
+                cols: 2
+                Label:
+                    text: "Client:"
+                GridLayout:
+                    cols: 2
+                    TextInput:
+                        text: root.client_address
+                        multiline: False
+                    ToggleButton:
+                        text: "Use unix"
+                        id: "use_unix"
+                        active: root.client_use_unix
