@@ -93,7 +93,7 @@ class MainWidget(Widget):
         elif lnames1[2] is isself:
             nameofserver.text = "Own client"
         else:
-            nameofserver.text = "Identified as: {}".format(lnames1[2][0])
+            nameofserver.text = "Identified as:\n{}".format(lnames1[2][0])
         wid = self.ids.get("serverlist")
         for node in wid.iterate_all_nodes():
             if node.parent_node:

@@ -20,30 +20,35 @@ MainWidget:
         TabbedPanelItem:
             text: 'Chats'
             FloatLayout:
-                canvas:
-                    Color:
-                        rgba: 0,0,0,0
                 Slider:
-                    pos_hint: {"x": 0, 'y': 0.95}
+                    pos_hint: {"x": 0, 'y': 0}
                     size_hint: 0.3, 0.05
                     min: 0
                     max: 2
                     step: 1
+                    value: 0
+                   #on_value: root.set_sensitivelabel()
+                    id: sensslider
                     opacity: 0.4
                 Label:
-                    pos_hint: {"x": 0, 'y': 0.95}
-                    size_hint: 0.3, 0.05
-                    text: "sensitive"
-                ScrollView:
                     pos_hint: {"x": 0, 'y': 0}
-                    size_hint: 0.3, 0.95
+                    size_hint: 0.3, 0.1
+                    font_size: 20
+                    #valign: "end"
+                    #bold: True
+                    text: "normal"
+                    color: 0,1,0,1
+                    id: senslabel
+                ScrollView:
+                    pos_hint: {"x": 0, 'y': 0.1}
+                    size_hint: 0.3, 0.9
                     TreeView:
                         id: chatfriends
                         root_options: {"text": "Chats"}
 
                 ScrollView:
                     pos_hint: {"x": 0.305, 'y': 0.3}
-                    size_hint: 0.7, 0.7
+                    size_hint: 0.695, 0.7
                     TreeView:
                         id: chatwinhist
                         root_options: {"text": "Chat history"}
@@ -67,10 +72,6 @@ MainWidget:
             text: 'Server & Friends'
             on_state: root.async_load(root.load_friends)
             FloatLayout:
-                canvas:
-                    Color:
-                        rgba: 0,0.1,0,0
-                
                 Label:
                     text: "Server:"
                     pos: 0, 0
@@ -112,9 +113,6 @@ MainWidget:
             GridLayout:
                 row_default_height: 30
                 row_force_default: True
-                canvas:
-                    Color:
-                        rgba: 0.1,0,0,0
                 cols: 2
                 Label:
                     text: "Client:"
