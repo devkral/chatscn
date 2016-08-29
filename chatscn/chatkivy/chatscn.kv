@@ -1,3 +1,15 @@
+<FriendTreeNode>:
+    rows: 1
+    height: 30
+
+<ChatAvailTreeNode>:
+    rows: 1
+    height: 30
+
+<ServerTreeNode>
+    height: 30
+    
+
 MainWidget:
     TabbedPanel:
         pos: 0, 0
@@ -11,18 +23,29 @@ MainWidget:
                 canvas:
                     Color:
                         rgba: 0,0,0,0
+                Slider:
+                    pos_hint: {"x": 0, 'y': 0.95}
+                    size_hint: 0.3, 0.05
+                    min: 0
+                    max: 2
+                    step: 1
+                    opacity: 0.4
+                Label:
+                    pos_hint: {"x": 0, 'y': 0.95}
+                    size_hint: 0.3, 0.05
+                    text: "sensitive"
                 ScrollView:
                     pos_hint: {"x": 0, 'y': 0}
-                    size_hint: 0.3, 1
+                    size_hint: 0.3, 0.95
                     TreeView:
-                        id: "chatfriends"
+                        id: chatfriends
                         root_options: {"text": "Chats"}
 
                 ScrollView:
                     pos_hint: {"x": 0.305, 'y': 0.3}
                     size_hint: 0.7, 0.7
                     TreeView:
-                        id: "chatwinhist"
+                        id: chatwinhist
                         root_options: {"text": "Chat history"}
                 TextInput:
                     pos: 0, 0
@@ -42,6 +65,7 @@ MainWidget:
 
         TabbedPanelItem:
             text: 'Server & Friends'
+            on_state: root.async_load(root.load_friends)
             FloatLayout:
                 canvas:
                     Color:
@@ -59,17 +83,19 @@ MainWidget:
                     size_hint: 0.9, 0.05
                     TextInput:
                         text: 
+                        id: serveraddressinp
+                        on_text_validate: root.load_servernames()
                         multiline: False
                     Label:
                         text: ""
-                        id: "nameserver"
+                        id: nameofserver
                 
                 ScrollView:
                     pos: 0, 0
                     pos_hint: {"x": 0, 'y': 0}
                     size_hint: 0.5, 0.95
                     TreeView:
-                        id: "serverlist"
+                        id: serverlist
                         root_options: {"text": "Serverentries"}
                         
 
@@ -78,12 +104,14 @@ MainWidget:
                     pos_hint: {"x": 0.5, 'y': 0}
                     size_hint: 0.5, 0.95
                     TreeView:
-                        id: "friendlist"
+                        id: friendlist
                         root_options: {"text": "Friends"}
         
         TabbedPanelItem:
             text: 'Settings'
             GridLayout:
+                row_default_height: 30
+                row_force_default: True
                 canvas:
                     Color:
                         rgba: 0.1,0,0,0
@@ -97,5 +125,5 @@ MainWidget:
                         multiline: False
                     ToggleButton:
                         text: "Use unix"
-                        id: "use_unix"
+                        id: use_unix
                         active: root.client_use_unix
