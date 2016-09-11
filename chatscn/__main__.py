@@ -26,7 +26,7 @@ if __name__ == "__main__":
         else:
             open_gui(sys.argv[1], use_unix=False)
     else:
-        p = getlocalclient(cleanupoldfiles=True)
+        p = getlocalclient()
         if not p:
             ret = start.client([], doreturn=True)
             if ret:

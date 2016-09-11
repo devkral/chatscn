@@ -5,14 +5,15 @@ import threading
 import abc
 import ssl
 import json
+import logging
 import socket
 import functools
 import os
 import socketserver
 import time
 
-from http import server
-from simplescn.tools import default_sslcont, dhash
+from http import server, client
+from simplescn.tools import default_sslcont, dhash, scnparse_url
 def license():
     print("This software is licensed under MIT-License")
 thisdir = os.path.dirname(__file__)
@@ -29,35 +30,108 @@ def getticket(path, certhash):
                 number = int(rowob.read()) + 1
                 rowob.seek(0, 0)
                 rowob.write(str(number))
-                return number, access_buffer(certhash)
+                return number
         except:
             with open(os.path.join(path, "number"), "w") as rowob:
                 rowob.write("0")
-                return 0, access_buffer(certhash)
+                return 0
 
-def access_buffer(certhash):
+def writeBuffer(number,  certhash, newentry):
     with simplelock:
         if certhash not in messagebuffer:
-            messagebuffer[certhash] = []
-        newentry = {}
-        messagebuffer.append(newentry)
-        return newentry
+            messagebuffer[certhash] = {}
+        messagebuffer[number] = newentry
 
-def writeStuff(path, certhash, dicob, isowner):
-    if path is not None:
-        luckynumber, entry = getticket(os.path.join(path, certhash), certhash)
-    else:
-        luckynumber = None
-        entry = access_buffer(certhash)
+def writeStuff(path, certhash, dicob, isowner, writedisk=True):
+    luckynumber = getticket(os.path.join(path, certhash), certhash)
     dicob["owner"] = isowner
     dicob["time"] = int(time.time())
     dicob["number"] = luckynumber
-    if luckynumber:
+    if writedisk:
         with open(os.path.join(path, certhash, "{}.json"(luckynumber)), "w") as waffle:
             json.dump(waffle, dicob)
-    for key, val in dicob.items():
-        entry[key] = val
-    return entry
+    else:
+        writeBuffer(luckynumber, certhash, dicob.copy())
+    return dicob
+
+def senslevel_to_text(level):
+    if level == 0:
+        return "normal"
+    elif level == 1:
+        return "private"
+    elif level == 2:
+        return "sensitive"
+    return ""
+
+class SCNSender(object):
+    ownaddress = None
+    requester = None
+    basedir =  None
+    def __init__(self, address,  requester, basedir):
+        self.ownaddress = address
+        self.requester = requester
+        self.basedir = basedir
+        
+    def do_request(self, path, body, headers, **kwargs):
+         return self.requester.do_request(self.ownaddress, path, body=body, headers=headers, **kwargs)
+
+    def do_request_simple(self, path, body, headers, **kwargs):
+         return self.requester.do_request_simple(self.ownaddress, path, body=body, headers=headers, **kwargs)
+
+    def do_requestdo(self, address: str, path: str, body): #, headers: dict, **kwargs
+        body = {"name": "chatscn", "address": address}
+        respw = self.do_request("/client/wrap", body, {})
+        if not respw[1] or respw[0] is None:
+            logging.error(respw[2])
+            return None
+
+        con = client.HTTPConnection(*scnparse_url(address))
+        con.sock = respw[0].sock
+        respw[0].sock = None
+        #print("lsls")
+        ob = bytes(body,"utf-8")
+        con.putrequest("POST", "/chat")
+        con.putheader("Content-Length", str(len(ob)))
+        con.putheader("Content-Type", "application/json")
+        con.endheaders()
+        con.send(ob)
+        respl = con.getresponse()
+
+        if respl.status != 200:
+            logging.error(respl.read())
+        return respl
+
+    def send_text(self, address, certhash, sensitivel, text):
+        body = {"text": text}
+        resp = self.do_requestdo(address, "/chat_{}/text".format(sensitivel), body)
+        if resp.status == 200:
+            writeStuff(self.basepath, certhash, body, True, writedisk= sensitivel==0)
+            return True
+        return False
+
+    def send_image(self, address, certhash, pathtofile):
+        pass
+   
+    def send_file(self, address, certhash, filepath):
+        pass
+
+async def _loadfromdir(fpath, func, data):
+    try:
+        with open(fpath, "r") as ro:
+            job = json.load(ro)
+    except Exception as exc:
+        logging.info("broken file", exc)
+        os.remove(fpath)
+        return None
+    return func(fpath, job)
+
+def loadfromdir(basedir, func, data=None):
+    ret = []
+    for filename  in sorted(os.listdir(basedir)):
+        fpath = os.path.join(basedir, filename)
+        ret.append(_loadfromdir(fpath, func, data))
+    return ret
+
 
 allowed_types = {"image", "file", "text"}
 class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
@@ -109,8 +183,13 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
             ret["type"] = send_type
-            ret["sensitivity"] = "normal"
-            self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False))
+            ret["sensitivity"] = 0
+            self.send_response(200)
+            self.end_headers()
+            self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=True))
+        else:
+            self.send_error(411) 
+
     def chat_private(self, send_type):
         if send_type not in allowed_types:
             self.send_error(400, "invalid type")
@@ -119,9 +198,11 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
             ret["type"] = send_type
-            ret["sensitivity"] = "private"
-            self.notify(writeStuff(None, str(self.certtupel[1]), ret, False))
-        
+            ret["sensitivity"] = 1
+            self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
+        else:
+            self.send_error(411) 
+
     def chat_sensitive(self, send_type):
         if send_type not in allowed_types:
             self.send_error(400, "invalid type")
@@ -133,8 +214,10 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
             ret["type"] = send_type
-            ret["sensitivity"] = "sensitive"
-            self.notify(writeStuff(None, str(self.certtupel[1]), ret, False))
+            ret["sensitivity"] = 2
+            self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
+        else:
+            self.send_error(411) 
 
     def send_file(self, pathid):
         path = pathbuffer.get("".join(pathid, self.certtupel[1]), (None, None))[0]
@@ -188,18 +271,18 @@ class httpserver(socketserver.ThreadingMixIn, server.HTTPServer):
     address_family = socket.AF_INET6
     socket_type = socket.SOCK_STREAM
 
-def init(requester, address, handler):
+def init(srequester, handler):
     hserver = httpserver(("::1", 0), handler)
     body = {"port": hserver.server_port, "name": "chatscn", "post": True, "wrappedport": True}
-    resp = requester.do_request(address, "/client/registerservice", body, {})
+    resp = srequester.do_request("/client/registerservice", body, {})
     if resp[0]:
         resp[0].close()
     if not resp[1]:
-        print(resp[2])
+        logging.error(resp[2])
         hserver.shutdown()
         return None
     handler.forcehash = resp[3][1]
     threading.Thread(target=hserver.serve_forever, daemon=True).start()
-    requester.saved_kwargs["forcehash"] = resp[3][1]
-    requester.saved_kwargs["ownhash"] = resp[3][1]
+    srequester.requester.saved_kwargs["forcehash"] = resp[3][1]
+    srequester.requester.saved_kwargs["ownhash"] = resp[3][1]
     return hserver

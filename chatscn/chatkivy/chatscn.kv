@@ -26,9 +26,9 @@ MainWidget:
                     min: 0
                     max: 2
                     step: 1
-                    value: 0
-                   #on_value: root.set_sensitivelabel()
-                    id: sensslider
+                    #value: 0
+                    on_value: root.set_sensitivelabel(self)
+                    #id: sensslider
                     opacity: 0.4
                 Label:
                     pos_hint: {"x": 0, 'y': 0}
@@ -63,6 +63,7 @@ MainWidget:
                     size_hint: 0.7, 0.06
                     Button:
                         text: 'Send'
+                        #on_press: root.requester.send_text()
                     Button:
                         text: 'Image'
                     Button:
@@ -70,7 +71,7 @@ MainWidget:
 
         TabbedPanelItem:
             text: 'Server & Friends'
-            on_state: root.async_load(root.load_friends)
+            on_state: if self.state == 'down': root.async_load(root.load_friends)
             FloatLayout:
                 Label:
                     text: "Server:"
@@ -90,7 +91,10 @@ MainWidget:
                     Label:
                         text: ""
                         id: nameofserver
-                
+                    Button:
+                        text: "Register"
+                        id: registerserverb
+                        on_press: root.registerserver()
                 ScrollView:
                     pos: 0, 0
                     pos_hint: {"x": 0, 'y': 0}
@@ -98,18 +102,18 @@ MainWidget:
                     TreeView:
                         id: serverlist
                         root_options: {"text": "Serverentries"}
-                        
 
                 ScrollView:
                     pos: 0, 0
-                    pos_hint: {"x": 0.5, 'y': 0}
-                    size_hint: 0.5, 0.95
+                    pos_hint: {"x": 0.51, 'y': 0}
+                    size_hint: 0.49, 0.95
                     TreeView:
                         id: friendlist
                         root_options: {"text": "Friends"}
         
         TabbedPanelItem:
             text: 'Settings'
+            #on_state: if self.state == True: root.async_load(root.load_friends)
             GridLayout:
                 row_default_height: 30
                 row_force_default: True
@@ -119,9 +123,7 @@ MainWidget:
                 GridLayout:
                     cols: 2
                     TextInput:
-                        text: root.client_address
                         multiline: False
                     ToggleButton:
                         text: "Use unix"
                         id: use_unix
-                        active: root.client_use_unix
