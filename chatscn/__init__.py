@@ -9,32 +9,36 @@ import logging
 import socket
 import functools
 import os
+import pathlib
 import socketserver
 import time
 
 from http import server, client
-from simplescn.tools import default_sslcont, dhash, scnparse_url
+from simplescn.tools import default_sslcont, dhash
+#, scnparse_url
 def license():
     print("This software is licensed under MIT-License")
 thisdir = os.path.dirname(__file__)
 
 messagebuffer = {}
-pathbuffer = {}
+allowed_types = {"image", "file", "text"}
 
 simplelock = threading.RLock()
-def getticket(path, certhash):
+def getticket(path, nonewticket=False):
     with simplelock:
         os.makedirs(path, 0o700, exist_ok=True)
         try:
             with open(os.path.join(path, "number"), "rw") as rowob:
                 number = int(rowob.read()) + 1
-                rowob.seek(0, 0)
-                rowob.write(str(number))
+                if not nonewticket:
+                    rowob.seek(0, 0)
+                    rowob.write(str(number))
                 return number
         except:
-            with open(os.path.join(path, "number"), "w") as rowob:
-                rowob.write("0")
-                return 0
+            if not nonewticket:
+                with open(os.path.join(path, "number"), "w") as rowob:
+                    rowob.write("0")
+            return 0
 
 def writeBuffer(number,  certhash, newentry):
     with simplelock:
@@ -42,8 +46,11 @@ def writeBuffer(number,  certhash, newentry):
             messagebuffer[certhash] = {}
         messagebuffer[number] = newentry
 
-def writeStuff(path, certhash, dicob, isowner, writedisk=True):
-    luckynumber = getticket(os.path.join(path, certhash), certhash)
+def writeStuff(path, certhash, dicob, isowner, writedisk=True, ticketnumber=None):
+    if ticketnumber:
+        luckynumber = ticketnumber
+    else:
+        luckynumber = getticket(os.path.join(path, certhash))
     dicob["owner"] = isowner
     dicob["time"] = int(time.time())
     dicob["number"] = luckynumber
@@ -64,31 +71,32 @@ def senslevel_to_text(level):
     return ""
 
 class SCNSender(object):
-    ownaddress = None
     requester = None
     basedir =  None
-    def __init__(self, address,  requester, basedir):
-        self.ownaddress = address
+    cur_address= None
+    cur_server = None
+    def __init__(self, requester, basedir):
         self.requester = requester
         self.basedir = basedir
-        
-    def do_request(self, path, body, headers, **kwargs):
-         return self.requester.do_request(self.ownaddress, path, body=body, headers=headers, **kwargs)
 
-    def do_request_simple(self, path, body, headers, **kwargs):
-         return self.requester.do_request_simple(self.ownaddress, path, body=body, headers=headers, **kwargs)
-
-    def do_requestdo(self, address: str, path: str, body): #, headers: dict, **kwargs
-        body = {"name": "chatscn", "address": address}
-        respw = self.do_request("/client/wrap", body, {})
+    def do_requestdo(self, path: str, body: dict, certhash=None): #, headers: dict, **kwargs
+        if not self.cur_address:
+            if not self.cur_server or not certhash:
+                logging.error("no address and no server/certhash")
+                return None
+            respw = self.requester.wrap_via_server(server, certhash)
+        else:
+            body = {"name": "chatscn", "address": self.cur_address}
+            if certhash:
+                body["forcehash"] = certhash
+            respw = self.requester.do_request("/client/wrap", body, {})
         if not respw[1] or respw[0] is None:
             logging.error(respw[2])
             return None
 
-        con = client.HTTPConnection(*scnparse_url(address))
+        con = client.HTTPConnection(respw[2]["address"], respw[2]["port"])
         con.sock = respw[0].sock
         respw[0].sock = None
-        #print("lsls")
         ob = bytes(body,"utf-8")
         con.putrequest("POST", "/chat")
         con.putheader("Content-Length", str(len(ob)))
@@ -101,19 +109,45 @@ class SCNSender(object):
             logging.error(respl.read())
         return respl
 
-    def send_text(self, address, certhash, sensitivel, text):
-        body = {"text": text}
-        resp = self.do_requestdo(address, "/chat_{}/text".format(sensitivel), body)
+    def send_text(self, certhash, sensitivel, text):
+        body = {"text": text, "type": "text", "sensitivity": sensitivel}
+        sensname = senslevel_to_text(sensitivel)
+        resp = self.send_via_server("/chat_{}/text".format(sensname, body), certhash=certhash)
         if resp.status == 200:
-            writeStuff(self.basepath, certhash, body, True, writedisk= sensitivel==0)
-            return True
-        return False
+            return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
+        return None
 
-    def send_image(self, address, certhash, pathtofile):
-        pass
+    def send_image(self, certhash, sensitivel, filepath, name=None, caption=None):
+        body = {"type": "image", "caption": caption, "sensitivity": sensitivel}
+        if name:
+            body["name"] = name
+        else:
+            body["name"] = os.path.basename(filepath)
+        # TODO: convert/compress images, changeable size
+        if os.path.stat(filepath).st_size > 8*1024*1024:
+            logging.warning("image very big")
+        with open(filepath, "r", errors='backslashreplace') as imgreob:
+            body["image"] = imgreob.read()
+        sensname = senslevel_to_text(sensitivel)
+        resp = self.send_via_server("/chat_{}/image".format(sensname), body, certhash=certhash)
+        if resp.status == 200:
+            body["filepath"] = filepath
+            return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
+        return None
    
-    def send_file(self, address, certhash, filepath):
-        pass
+    def send_file(self, certhash, sensitivel, filepath, name=None):
+        body = {"type": "file", "sensitivity": sensitivel}
+        if name:
+            body["name"] = name
+        else:
+            body["name"] = os.path.basename(filepath)
+        body["fileid"]  = getticket(os.path.join(self.basepath, certhash))
+        sensname = senslevel_to_text(sensitivel)
+        resp = self.send_via_server("/chat_{}/file".format(sensname), body, certhash=certhash)
+        if resp.status == 200:
+            body["filepath"] = filepath
+            return writeStuff(self.basepath, certhash, body, True, ticketnumber=body["fileid"], writedisk=sensitivel==0)
+        return None
 
 async def _loadfromdir(fpath, func, data):
     try:
@@ -127,13 +161,13 @@ async def _loadfromdir(fpath, func, data):
 
 def loadfromdir(basedir, func, data=None):
     ret = []
-    for filename  in sorted(os.listdir(basedir)):
-        fpath = os.path.join(basedir, filename)
-        ret.append(_loadfromdir(fpath, func, data))
+    for fpath  in sorted(pathlib.Path(basedir).iterdir()):
+        #fpath = os.path.join(basedir, filename)
+        if fpath.name.isdecimal():
+            ret.append(_loadfromdir(fpath, func, data))
     return ret
 
-
-allowed_types = {"image", "file", "text"}
+# TODO: max request size
 class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
     forcehash = None
     certtupel = (None, None, None)
@@ -175,6 +209,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
     def webversion(self, page):
         with open(os.path.join(thisdir, "webdata", page), "rb") as ro:
             return ro.read()
+
     def chat_normal(self, send_type):
         if send_type not in allowed_types:
             self.send_error(400, "invalid type")
@@ -219,13 +254,26 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         else:
             self.send_error(411) 
 
-    def send_file(self, pathid):
-        path = pathbuffer.get("".join(pathid, self.certtupel[1]), (None, None))[0]
-        if path is None:
-            self.send_error(404, "File not available")
+    def send_file(self, fileid: str):
+        if not fileid.isdecimal():
+            self.send_error(400, "invalid fileid")
             return
-        if not os.path.exists(path):
-            self.send_error(404, "File not exists")
+        entry = messagebuffer.get(self.certtupel[1] , {}).get(int(fileid), None)
+        if not entry:
+            fjspath = os.path.join(self.basedir, self.certtupel[1], fileid)
+            try:
+                with open(fjspath, "r") as reob:
+                    entry = json.read(reob)
+            except Exception:
+                self.send_error(404, "File not available")
+                return
+
+        if entry.get("type") != "file" or not entry.get("owner"):
+            self.send_error(500, "send_file: entry has wrong format")
+            return
+        path = os.path.exists(entry.get("filepath", ""))
+        if not path:
+            self.send_error(404, "File was deleted")
             return
         range = self.headers.get("Range", None)
         if range:
@@ -274,7 +322,7 @@ class httpserver(socketserver.ThreadingMixIn, server.HTTPServer):
 def init(srequester, handler):
     hserver = httpserver(("::1", 0), handler)
     body = {"port": hserver.server_port, "name": "chatscn", "post": True, "wrappedport": True}
-    resp = srequester.do_request("/client/registerservice", body, {})
+    resp = srequester.requester.do_request("/client/registerservice", body, {})
     if resp[0]:
         resp[0].close()
     if not resp[1]:

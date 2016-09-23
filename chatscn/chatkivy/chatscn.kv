@@ -8,7 +8,34 @@
 
 <ServerTreeNode>
     height: 30
-    
+
+<ImageDialog>
+    BoxLayout:
+        orientation: 'horizontal'
+        pos: 0, 0
+        pos_hint: {"x": 0, 'y': 0.95}
+        size_hint: 1, 0.05
+        Label:
+            text: "Caption"
+        TextInput:
+            id: caption
+            multiline: False
+    FileDialog:
+        buttons: {"send": lambda selection: root._send_image(selection, caption), "cancel": lambda selection: root.dismiss_popup()}
+        pos_hint: {"x": 0, 'y': 0}
+        size_hint: 1, 0.95
+
+<FileDialog>
+    FileChooserListView:
+        pos_hint: {"x": 0, 'y': 0.05}
+        size_hint: 1, 0.95
+        id: selectedfile
+    BoxLayout:
+        orientation: 'horizontal'
+        pos: 0, 0
+        pos_hint: {"x": 0, 'y': 0}
+        size_hint: 1, 0.05
+        id: buttonlist
 
 MainWidget:
     TabbedPanel:
@@ -45,7 +72,6 @@ MainWidget:
                     TreeView:
                         id: chatfriends
                         root_options: {"text": "Chats"}
-
                 ScrollView:
                     pos_hint: {"x": 0.305, 'y': 0.3}
                     size_hint: 0.695, 0.7
@@ -54,6 +80,7 @@ MainWidget:
                         root_options: {"text": "Chat history"}
                 TextInput:
                     pos: 0, 0
+                    id: chattext
                     pos_hint: {"x": 0.3, 'y': 0.07}
                     size_hint: 0.7, 0.2
                 BoxLayout:
@@ -63,11 +90,13 @@ MainWidget:
                     size_hint: 0.7, 0.06
                     Button:
                         text: 'Send'
-                        #on_press: root.requester.send_text()
+                        on_press: root.send_text()
                     Button:
                         text: 'Image'
+                        on_press: root.send_image()
                     Button:
                         text: 'Files'
+                        on_press: root.send_file()
 
         TabbedPanelItem:
             text: 'Server & Friends'
