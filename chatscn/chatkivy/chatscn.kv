@@ -21,34 +21,61 @@
             id: caption
             multiline: False
     FileDialog:
-        buttons: {"send": lambda selection: root._send_image(selection, caption), "cancel": lambda selection: root.dismiss_popup()}
+        buttons: [("Send",  lambda selection: app.root._send_image(selection, caption)), ("Cancel", lambda selection: app.root.dismiss_popup())]
         pos_hint: {"x": 0, 'y': 0}
         size_hint: 1, 0.95
 
 <FileDialog>
     FileChooserListView:
-        pos_hint: {"x": 0, 'y': 0.05}
-        size_hint: 1, 0.95
+        pos_hint: {"x": 0, 'y': 0.1}
+        size_hint: 1, 0.9
         id: selectedfile
     BoxLayout:
         orientation: 'horizontal'
         pos: 0, 0
         pos_hint: {"x": 0, 'y': 0}
-        size_hint: 1, 0.05
+        size_hint: 1, 0.07
         id: buttonlist
 
+<PwDialog>:
+    msg: msglabel.text
+    Label:
+        id: msglabel
+    TextInput:
+        id: pwfield
+        multiline: False
+
 MainWidget:
-    TabbedPanel:
-        pos: 0, 0
-        size: root.width, root.height
-        tab_width: root.width/3
-        tab_pos: "top_left"
-        do_default_tab: False
-        TabbedPanelItem:
-            text: 'Chats'
+    ToggleButton:
+        text: 'Chats'
+        pos_hint: {"x": 0, 'y': 0.95}
+        size_hint: 0.1, 0.05
+        on_press: screenman.current="chats"
+        group: "chatsv"
+        state: "down"
+
+    ToggleButton:
+        text: 'Server & Friends'
+        pos_hint: {"x": 0.10, 'y': 0.95}
+        size_hint: 0.2, 0.05
+        on_press: screenman.current="server"
+        group: "chatsv"
+    Button:
+        text: 'Settings'
+        pos_hint: {"x": 0.90, 'y': 0.95}
+        size_hint: 0.1, 0.05
+        #on_press
+
+    ScreenManager:
+        pos_hint: {"x": 0.01, 'y': 0.01}
+        size_hint: 0.98, 0.92
+        id: screenman
+        Screen:
+            name: 'chats'
+            #on_enter: 
             FloatLayout:
                 Slider:
-                    pos_hint: {"x": 0, 'y': 0}
+                    pos_hint: {"x": 0, 'y': 0.02}
                     size_hint: 0.3, 0.05
                     min: 0
                     max: 2
@@ -59,7 +86,7 @@ MainWidget:
                     opacity: 0.4
                 Label:
                     pos_hint: {"x": 0, 'y': 0}
-                    size_hint: 0.3, 0.1
+                    size_hint: 0.3, 0.15
                     font_size: 20
                     #valign: "end"
                     #bold: True
@@ -72,35 +99,48 @@ MainWidget:
                     TreeView:
                         id: chatfriends
                         root_options: {"text": "Chats"}
-                ScrollView:
-                    pos_hint: {"x": 0.305, 'y': 0.3}
-                    size_hint: 0.695, 0.7
-                    TreeView:
-                        id: chatwinhist
-                        root_options: {"text": "Chat history"}
                 TextInput:
-                    pos: 0, 0
-                    id: chattext
-                    pos_hint: {"x": 0.3, 'y': 0.07}
-                    size_hint: 0.7, 0.2
-                BoxLayout:
-                    orientation: 'horizontal'
-                    pos: 0, 0
-                    pos_hint: {"x": 0.3, 'y': 0}
-                    size_hint: 0.7, 0.06
-                    Button:
-                        text: 'Send'
-                        on_press: root.send_text()
-                    Button:
-                        text: 'Image'
-                        on_press: root.send_image()
-                    Button:
-                        text: 'Files'
-                        on_press: root.send_file()
+                    hint_text: "Conversation Hash"
+                    pos_hint: {"x": 0.305, 'y': 0.01}
+                    size_hint: 0.695, 0.075
+                    #on_double_tap: pass
+                    text: ""
+                    #padding: self.width/3, self.height/3, 5, 5
+                    id: convershash
+                    multiline: False
+                FloatLayout:
+                    pos_hint: {"x": 0.305, 'y': 0.1}
+                    size_hint: 0.695, 0.9
+                    id: chatview
+                    ScrollView:
+                        pos_hint: {"x": 0, 'y': 0.3}
+                        size_hint: 1, 0.7
+                        TreeView:
+                            id: chathist
+                            root_options: {"text": "Chat history"}
+                    TextInput:
+                        pos: 0, 0
+                        id: chattext
+                        pos_hint: {"x": 0, 'y': 0.07}
+                        size_hint: 1, 0.2
+                    BoxLayout:
+                        orientation: 'horizontal'
+                        pos: 0, 0
+                        pos_hint: {"x": 0, 'y': 0}
+                        size_hint: 1, 0.06
+                        Button:
+                            text: 'Send'
+                            on_press: root.send_text()
+                        Button:
+                            text: 'Image'
+                            on_press: root.send_image()
+                        Button:
+                            text: 'Files'
+                            on_press: root.send_file()
 
-        TabbedPanelItem:
-            text: 'Server & Friends'
-            on_state: if self.state == 'down': root.async_load(root.load_friends)
+        Screen:
+            name: 'server'
+            on_enter: app.async_load(root.load_friends)
             FloatLayout:
                 Label:
                     text: "Server:"
@@ -113,7 +153,7 @@ MainWidget:
                     pos_hint: {"x": 0.1, 'y': 0.95}
                     size_hint: 0.9, 0.05
                     TextInput:
-                        text: 
+                        text: ""
                         id: serveraddressinp
                         on_text_validate: root.load_servernames()
                         multiline: False
@@ -139,20 +179,3 @@ MainWidget:
                     TreeView:
                         id: friendlist
                         root_options: {"text": "Friends"}
-        
-        TabbedPanelItem:
-            text: 'Settings'
-            #on_state: if self.state == True: root.async_load(root.load_friends)
-            GridLayout:
-                row_default_height: 30
-                row_force_default: True
-                cols: 2
-                Label:
-                    text: "Client:"
-                GridLayout:
-                    cols: 2
-                    TextInput:
-                        multiline: False
-                    ToggleButton:
-                        text: "Use unix"
-                        id: use_unix

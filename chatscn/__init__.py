@@ -17,7 +17,7 @@ from http import server, client
 from simplescn.tools import default_sslcont, dhash
 #, scnparse_url
 def license():
-    print("This software is licensed under MIT-License")
+    print("This software is licensed under the MIT-License")
 thisdir = os.path.dirname(__file__)
 
 messagebuffer = {}

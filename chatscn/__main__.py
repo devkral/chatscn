@@ -35,4 +35,4 @@ if __name__ == "__main__":
         if p:
             open_gui(*p)
         else:
-            print("Client could not started")
+            print("Starting client failed")
