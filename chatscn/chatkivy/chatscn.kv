@@ -46,25 +46,44 @@
         multiline: False
 
 MainWidget:
-    ToggleButton:
-        text: 'Chats'
-        pos_hint: {"x": 0, 'y': 0.95}
-        size_hint: 0.1, 0.05
-        on_press: screenman.current="chats"
-        group: "chatsv"
-        state: "down"
+    BoxLayout:
+        orientation: 'horizontal'
+        pos_hint: {"x": 0.01, 'y': 0.92}
+        size_hint: 0.98, 0.06
+        ToggleButton:
+            text: 'Chats'
+            on_press: screenman.current="chats"
+            group: "chatsv"
+            state: "down"
 
-    ToggleButton:
-        text: 'Server & Friends'
-        pos_hint: {"x": 0.10, 'y': 0.95}
-        size_hint: 0.2, 0.05
-        on_press: screenman.current="server"
-        group: "chatsv"
-    Button:
-        text: 'Settings'
-        pos_hint: {"x": 0.90, 'y': 0.95}
-        size_hint: 0.1, 0.05
-        #on_press
+        ToggleButton:
+            text: 'Server & Friends'
+            on_press: screenman.current="server"
+            group: "chatsv"
+        FloatLayout:
+            Label:
+                pos_hint: {"x": 0, 'y': 0}
+                size_hint: 1, 1
+                font_size: 20
+                #valign: "end"
+                #bold: True
+                text: "normal"
+                disabled: True
+                disabled_color: 0,1,0,1
+                id: senslabel
+            Slider:
+                pos_hint: {"x": 0, 'y': 0}
+                size_hint: 1, 1
+                min: 0
+                max: 2
+                step: 1
+                #value: 0
+                on_value: root.set_sensitivelabel(self)
+                #id: sensslider
+                opacity: 0.4
+        Button:
+            text: 'Settings'
+            #on_press
 
     ScreenManager:
         pos_hint: {"x": 0.01, 'y': 0.01}
@@ -74,25 +93,6 @@ MainWidget:
             name: 'chats'
             #on_enter: 
             FloatLayout:
-                Slider:
-                    pos_hint: {"x": 0, 'y': 0.02}
-                    size_hint: 0.3, 0.05
-                    min: 0
-                    max: 2
-                    step: 1
-                    #value: 0
-                    on_value: root.set_sensitivelabel(self)
-                    #id: sensslider
-                    opacity: 0.4
-                Label:
-                    pos_hint: {"x": 0, 'y': 0}
-                    size_hint: 0.3, 0.15
-                    font_size: 20
-                    #valign: "end"
-                    #bold: True
-                    text: "normal"
-                    color: 0,1,0,1
-                    id: senslabel
                 ScrollView:
                     pos_hint: {"x": 0, 'y': 0.1}
                     size_hint: 0.3, 0.9
@@ -149,7 +149,6 @@ MainWidget:
                     size_hint: 0.1, 0.05
                 BoxLayout:
                     orientation: 'horizontal'
-                    pos: 0, 0
                     pos_hint: {"x": 0.1, 'y': 0.95}
                     size_hint: 0.9, 0.05
                     TextInput:

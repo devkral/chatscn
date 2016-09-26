@@ -109,13 +109,13 @@ class MainWidget(FloatLayout):
         val = int(widget.value)
         if val == 0:
             self.ids["senslabel"].text = chatscn.senslevel_to_text(val)
-            self.ids["senslabel"].color = (0., 1., 0., 1.)
+            self.ids["senslabel"].disabled_color = (0., 1., 0., 1.)
         elif val == 1:
             self.ids["senslabel"].text = chatscn.senslevel_to_text(val)
-            self.ids["senslabel"].color = (0.8, 0., 0., 1.)
+            self.ids["senslabel"].disabled_color = (0.8, 0., 0., 1.)
         elif val == 2:
             self.ids["senslabel"].text = chatscn.senslevel_to_text(val)
-            self.ids["senslabel"].color = (1., 0.6, 0.2, 1.)
+            self.ids["senslabel"].disabled_color = (1., 0.6, 0.2, 1.)
         if val < 2 and self.senslevel >= 2:
             pass
         self.senslevel = val
@@ -125,7 +125,7 @@ class MainWidget(FloatLayout):
         reg1 = self.requester.requester.do_request_simple("/client/register", {"server": serverurlw.text}, {})
         if logcheck(reg1):
             self.load_servernames()
-    
+
     def send_text(self):
         chattext = self.ids["chattext"]
         certhash = self.ids["convershash"].text
