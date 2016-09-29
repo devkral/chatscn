@@ -14,7 +14,7 @@ import socketserver
 import time
 
 from http import server, client
-from simplescn.tools import default_sslcont, dhash
+from simplescn.tools import default_sslcont, dhash, logcheck_con, logcheck
 #, scnparse_url
 def license():
     print("This software is licensed under the MIT-License")
@@ -54,6 +54,7 @@ def writeStuff(path, certhash, dicob, isowner, writedisk=True, ticketnumber=None
     dicob["owner"] = isowner
     dicob["time"] = int(time.time())
     dicob["number"] = luckynumber
+    dicob["certhash"] = certhash
     if writedisk:
         with open(os.path.join(path, certhash, "{}.json"(luckynumber)), "w") as waffle:
             json.dump(waffle, dicob)
@@ -79,19 +80,18 @@ class SCNSender(object):
         self.requester = requester
         self.basedir = basedir
 
-    def do_requestdo(self, path: str, body: dict, certhash=None): #, headers: dict, **kwargs
+    def do_requestdo(self, path: str, body: dict, certhash=None, name=None): #, headers: dict, **kwargs
         if not self.cur_address:
-            if not self.cur_server or not certhash:
-                logging.error("no address and no server/certhash")
+            if not certhash:
+                logging.error("neither address nor certhash available")
                 return None
-            respw = self.requester.wrap_via_server(server, certhash)
+            respw = self.requester.wrap_via_server(certhash, "chatscn", server=self.cur_server, name=name)
         else:
             body = {"name": "chatscn", "address": self.cur_address}
             if certhash:
                 body["forcehash"] = certhash
             respw = self.requester.do_request("/client/wrap", body, {})
-        if not respw[1] or respw[0] is None:
-            logging.error(respw[2])
+        if not logcheck_con(respw, logging.ERROR):
             return None
 
         con = client.HTTPConnection(respw[2]["address"], respw[2]["port"])
@@ -109,18 +109,18 @@ class SCNSender(object):
             logging.error(respl.read())
         return respl
 
-    def send_text(self, certhash, sensitivel, text):
+    def send_text(self, certhash, sensitivel, text, name=None):
         body = {"text": text, "type": "text", "sensitivity": sensitivel}
         sensname = senslevel_to_text(sensitivel)
-        resp = self.send_via_server("/chat_{}/text".format(sensname, body), certhash=certhash)
-        if resp.status == 200:
+        resp = self.do_requestdo("/chat_{}/text".format(sensname), body, certhash=certhash, name=name)
+        if resp and resp.status == 200:
             return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
         return None
 
-    def send_image(self, certhash, sensitivel, filepath, name=None, caption=None):
+    def send_image(self, certhash, sensitivel, filepath, imgname=None, caption=None, name=None):
         body = {"type": "image", "caption": caption, "sensitivity": sensitivel}
-        if name:
-            body["name"] = name
+        if imgname:
+            body["name"] = imgname
         else:
             body["name"] = os.path.basename(filepath)
         # TODO: convert/compress images, changeable size
@@ -129,24 +129,24 @@ class SCNSender(object):
         with open(filepath, "r", errors='backslashreplace') as imgreob:
             body["image"] = imgreob.read()
         sensname = senslevel_to_text(sensitivel)
-        resp = self.send_via_server("/chat_{}/image".format(sensname), body, certhash=certhash)
-        if resp.status == 200:
+        resp = self.do_requestdo("/chat_{}/image".format(sensname), body, certhash=certhash, name=name)
+        if resp and resp.status == 200:
             body["filepath"] = filepath
             return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
         return None
    
-    def send_file(self, certhash, sensitivel, filepath, name=None):
+    def send_file(self, certhash, sensitivel, filepath, filename=None, name=None):
         body = {"type": "file", "sensitivity": sensitivel}
-        if name:
-            body["name"] = name
+        if filename:
+            body["name"] = filename
         else:
             body["name"] = os.path.basename(filepath)
         body["fileid"]  = getticket(os.path.join(self.basepath, certhash))
         sensname = senslevel_to_text(sensitivel)
-        resp = self.send_via_server("/chat_{}/file".format(sensname), body, certhash=certhash)
-        if resp.status == 200:
+        resp = self.do_requestdo("/chat_{}/file".format(sensname), body, certhash=certhash)
+        if resp and resp.status == 200:
             body["filepath"] = filepath
-            return writeStuff(self.basepath, certhash, body, True, ticketnumber=body["fileid"], writedisk=sensitivel==0)
+            return writeStuff(self.basepath, certhash, body, True, ticketnumber=body["fileid"], writedisk=sensitivel==0, name=name)
         return None
 
 async def _loadfromdir(fpath, func, data):
@@ -323,10 +323,7 @@ def init(srequester, handler):
     hserver = httpserver(("::1", 0), handler)
     body = {"port": hserver.server_port, "name": "chatscn", "post": True, "wrappedport": True}
     resp = srequester.requester.do_request("/client/registerservice", body, {})
-    if resp[0]:
-        resp[0].close()
-    if not resp[1]:
-        logging.error(resp[2])
+    if not logcheck(resp, logging.ERROR):
         hserver.shutdown()
         return None
     handler.forcehash = resp[3][1]

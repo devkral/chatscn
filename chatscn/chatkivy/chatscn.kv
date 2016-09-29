@@ -55,11 +55,16 @@ MainWidget:
             on_press: screenman.current="chats"
             group: "chatsv"
             state: "down"
+            allow_no_selection: True
+            id: chatbutton
 
         ToggleButton:
             text: 'Server & Friends'
             on_press: screenman.current="server"
             group: "chatsv"
+            allow_no_selection: True
+            id: serverbutton
+
         FloatLayout:
             Label:
                 pos_hint: {"x": 0, 'y': 0}
@@ -87,7 +92,7 @@ MainWidget:
 
     ScreenManager:
         pos_hint: {"x": 0.01, 'y': 0.01}
-        size_hint: 0.98, 0.92
+        size_hint: 0.98, 0.91
         id: screenman
         Screen:
             name: 'chats'
@@ -106,6 +111,7 @@ MainWidget:
                     #on_double_tap: pass
                     text: ""
                     #padding: self.width/3, self.height/3, 5, 5
+                    on_text: root.set_namehash(self.text)
                     id: convershash
                     multiline: False
                 FloatLayout:

@@ -4,15 +4,19 @@ kivy.require('1.9.1')
 
 import threading
 import os
+import io
+
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
 from kivy.uix.treeview import TreeViewNode
 from kivy.uix.gridlayout import GridLayout
 #from kivy.uix.boxlayout import BoxLayout
+#from kivy.uix.widget import Widget
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.image import Image
 from kivy.properties import ListProperty, StringProperty
 
 from simplescn.scnrequest import Requester
@@ -27,31 +31,73 @@ def genHandler(rootwidget, chatdirectory):
         root = rootwidget
         basedir = chatdirectory
         def notify(self, indict):
-            pass
+            if self.root.cur_hash != indict["certhash"]:
+                return
+            chathist = self.root.ids["chathist"]
+            chathist.add_node(ChatTreeNode(indict))
 
         def issensitive(self):
             return self.root.senslevel == 2
     return KivyHandler
 
+class ChatTreeNode(FloatLayout, TreeViewNode):
+    def __init__(self, indict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if indict["owner"]:
+            size = (0.7, 1)
+            pos = {"x": 0.3, "y":0}
+        else:
+            size = (0.7, 1)
+            pos = {"x": 0, "y":0}
+        if indict["type"] == "text":
+            self.height = 30
+            self.child = Label(text=indict["text"], size_hint=size, pos_hint=pos)
+        elif indict["type"] == "image":
+            self.height = 100
+            l = io.BytesIO(bytes(indict["image"], "utf-8"))
+            self.child = Image(source=l, size_hint=size, pos_hint=pos)
+        elif indict["type"] == "file":
+            pass
+        else:
+            raise
 
 class FriendTreeNode(GridLayout, TreeViewNode):
-    entry = ListProperty()
-    def __init__(self, *args, **kwargs):
+    entry = None
+    def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.entry = entry
         # name
         self.add_widget(Label(text=self.entry[0]))
         # security
         self.add_widget(Label(text=self.entry[4]))
 
+    def on_touch_down(self, touch):
+        ids = App.get_running_app().root.ids
+        if touch.is_double_tap:
+            ids["convershash"].text = self.entry[1]
+            ids["screenman"].current = "chats"
+            ids["chatbutton"].state = "down"
+            ids["serverbutton"].state = "normal"
+
 class ServerTreeNode(Label, TreeViewNode):
-    entry = ListProperty()
-    def __init__(self, *args, **kwargs):
+    def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.entry = entry
         # name
         if self.entry[3]:
             self.text = "{} ({})".format(self.entry[3], self.entry[0])
         else:
             self.text=self.entry[0]
+
+    def on_touch_down(self, touch):
+        ids = App.get_running_app().root.ids
+        if touch.is_double_tap:
+            ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
+            ids["screenman"].current = "chats"
+            ids["chatbutton"].state = "down"
+            ids["serverbutton"].state = "normal"
+
+
 
 class ChatAvailTreeNode(GridLayout, TreeViewNode):
     certhash = StringProperty()
@@ -92,6 +138,8 @@ class MainWidget(FloatLayout):
     requester = None
     pathchats = None
     senslevel = 0
+    cur_hash = ""
+    cur_name = None
     _popup = None
 
     def __init__(self, *args, **kwargs):
@@ -104,6 +152,13 @@ class MainWidget(FloatLayout):
     def dismiss_popup(self):
         if self._popup:
             self._popup.dismiss()
+    
+    def set_namehash(self, text):
+        splitted= text.rsplit("/", 1)
+        if len(splitted) == 2:
+            self.cur_name, self.cur_hash = splitted
+        else:
+            self.cur_name, self.cur_hash = None, splitted[0]
 
     def set_sensitivelabel(self, widget):
         val = int(widget.value)
@@ -122,16 +177,18 @@ class MainWidget(FloatLayout):
 
     def registerserver(self):
         serverurlw = self.ids["serveraddressinp"]
-        reg1 = self.requester.requester.do_request_simple("/client/register", {"server": serverurlw.text}, {})
+        serverurlt = serverurlw.text
+        if serverurlt == "":
+            return
+        reg1 = self.requester.requester.do_request_simple("/client/register", {"server": serverurlt}, {})
         if logcheck(reg1):
             self.load_servernames()
 
     def send_text(self):
         chattext = self.ids["chattext"]
-        certhash = self.ids["convershash"].text
-        if certhash == "":
+        if self.cur_hash == "":
             return
-        ret = self.requester.send_text(certhash, self.senslevel, chattext.text)
+        ret = self.requester.send_text(self.cur_hash, self.senslevel, chattext.text)
         if ret:
             chattext.text = ""
 
@@ -143,12 +200,11 @@ class MainWidget(FloatLayout):
         self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
-        certhash = self.ids["convershash"].text
-        if certhash == "":
+        if self.cur_hash == "":
             return
         if caption.strip() == "":
             caption = None
-        self.requester.send_image(certhash, self.senslevel, selectedfiles[0], caption=caption)
+        self.requester.send_image(self.cur_hash, self.senslevel, selectedfiles[0], caption=caption)
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection: self.dismiss_popup())]
@@ -159,21 +215,20 @@ class MainWidget(FloatLayout):
         self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
-        certhash = self.ids["convershash"].text
-        if certhash == "":
+        if self.cur_hash == "":
             return
-        self.requester.send_file(certhash, self.senslevel, selectedfiles[0])
+        self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0])
 
 
     def load_friends(self):
-        lnames1 = self.requester.do_request_simple("/client/listnodeall", {"filter": "client"}, {})
+        lnames1 = self.requester.requester.do_request_simple("/client/listnodeall", {"filter": "client"}, {})
         if not logcheck(lnames1):
             return
         wid = self.ids.get("friendlist")
         for node in wid.iterate_all_nodes():
             wid.remove_node(node)
         for entry in lnames1[1]["items"]:
-            wid.add_node(FriendTreeNode(entry=entry))
+            wid.add_node(FriendTreeNode(entry))
 
     def load_servernames(self):
         serverurlw = self.ids["serveraddressinp"]
@@ -210,7 +265,7 @@ class MainWidget(FloatLayout):
                     continue
                 else:
                     entryfriends.add(entry[3])
-                wid.add_node(ServerTreeNode(entry=entry))
+            wid.add_node(ServerTreeNode(entry))
 
     def load_avail_chats(self):
         os.makedirs(self.pathchats, mode=0o700, exist_ok=True)
