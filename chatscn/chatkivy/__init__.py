@@ -17,7 +17,8 @@ from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
-from kivy.properties import ListProperty, StringProperty
+from kivy.properties import ListProperty
+#, StringProperty
 
 from simplescn.scnrequest import Requester
 from simplescn.tools import logcheck
@@ -100,9 +101,10 @@ class ServerTreeNode(Label, TreeViewNode):
 
 
 class ChatAvailTreeNode(GridLayout, TreeViewNode):
-    certhash = StringProperty()
-    def __init__(self, *args, **kwargs):
+    certhash = None
+    def __init__(self, certhash, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.certhash = certhash
         # name
         self.add_widget(Label(text=self.certhash))
 
@@ -188,7 +190,7 @@ class MainWidget(FloatLayout):
         chattext = self.ids["chattext"]
         if self.cur_hash == "":
             return
-        ret = self.requester.send_text(self.cur_hash, self.senslevel, chattext.text)
+        ret = self.requester.send_text(self.cur_hash, self.senslevel, chattext.text, name=self.cur_name)
         if ret:
             chattext.text = ""
 
@@ -204,7 +206,7 @@ class MainWidget(FloatLayout):
             return
         if caption.strip() == "":
             caption = None
-        self.requester.send_image(self.cur_hash, self.senslevel, selectedfiles[0], caption=caption)
+        self.requester.send_image(self.cur_hash, self.senslevel, selectedfiles[0], caption=caption, name=self.cur_name)
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection: self.dismiss_popup())]
@@ -217,7 +219,7 @@ class MainWidget(FloatLayout):
             return
         if self.cur_hash == "":
             return
-        self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0])
+        self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0], name=self.cur_name)
 
 
     def load_friends(self):
@@ -274,7 +276,7 @@ class MainWidget(FloatLayout):
             wid.remove_node(node)
         for centry in os.listdir(self.pathchats):
             if check_hash(centry):
-                wid.add_node(ChatAvailTreeNode(certhash=centry))
+                wid.add_node(ChatAvailTreeNode(centry))
 
 class ChatSCNApp(App):
     requester = None
@@ -286,7 +288,7 @@ class ChatSCNApp(App):
         self.requester.saved_kwargs["pwhandler"] = self.root.pwhandler
         self.root.pathchats = os.path.join(self.user_data_dir, "chats")
         os.makedirs(self.root.pathchats, mode=0o700, exist_ok=True)
-        self.root.requester = chatscn.SCNSender(self.requester, MainWidget.pathchats)
+        self.root.requester = chatscn.SCNSender(self.requester, self.root.pathchats)
         MainWidget.hserver = chatscn.init(self.root.requester, genHandler(self.root, MainWidget.pathchats))
         if not MainWidget.hserver:
             raise

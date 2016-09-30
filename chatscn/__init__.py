@@ -14,7 +14,7 @@ import socketserver
 import time
 
 from http import server, client
-from simplescn.tools import default_sslcont, dhash, logcheck_con, logcheck
+from simplescn.tools import default_sslcont, dhash, logcheck_con, logcheck, scnparse_url
 #, scnparse_url
 def license():
     print("This software is licensed under the MIT-License")
@@ -56,8 +56,8 @@ def writeStuff(path, certhash, dicob, isowner, writedisk=True, ticketnumber=None
     dicob["number"] = luckynumber
     dicob["certhash"] = certhash
     if writedisk:
-        with open(os.path.join(path, certhash, "{}.json"(luckynumber)), "w") as waffle:
-            json.dump(waffle, dicob)
+        with open(os.path.join(path, certhash, "{}.json".format(luckynumber)), "w") as waffle:
+            json.dump(dicob, waffle)
     else:
         writeBuffer(luckynumber, certhash, dicob.copy())
     return dicob
@@ -94,11 +94,11 @@ class SCNSender(object):
         if not logcheck_con(respw, logging.ERROR):
             return None
 
-        con = client.HTTPConnection(respw[2]["address"], respw[2]["port"])
+        con = client.HTTPConnection(*scnparse_url(respw[2].get("address", self.cur_address)))
         con.sock = respw[0].sock
         respw[0].sock = None
-        ob = bytes(body,"utf-8")
-        con.putrequest("POST", "/chat")
+        ob = bytes(json.dumps(body),"utf-8")
+        con.putrequest("POST", path)
         con.putheader("Content-Length", str(len(ob)))
         con.putheader("Content-Type", "application/json")
         con.endheaders()
@@ -106,7 +106,7 @@ class SCNSender(object):
         respl = con.getresponse()
 
         if respl.status != 200:
-            logging.error(respl.read())
+            logging.error(str(respl.read(), "utf-8", "ignore"))
         return respl
 
     def send_text(self, certhash, sensitivel, text, name=None):
@@ -114,7 +114,7 @@ class SCNSender(object):
         sensname = senslevel_to_text(sensitivel)
         resp = self.do_requestdo("/chat_{}/text".format(sensname), body, certhash=certhash, name=name)
         if resp and resp.status == 200:
-            return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
+            return writeStuff(self.basedir, certhash, body, True, writedisk=sensitivel==0)
         return None
 
     def send_image(self, certhash, sensitivel, filepath, imgname=None, caption=None, name=None):
@@ -132,7 +132,7 @@ class SCNSender(object):
         resp = self.do_requestdo("/chat_{}/image".format(sensname), body, certhash=certhash, name=name)
         if resp and resp.status == 200:
             body["filepath"] = filepath
-            return writeStuff(self.basepath, certhash, body, True, writedisk=sensitivel==0)
+            return writeStuff(self.basedir, certhash, body, True, writedisk=sensitivel==0)
         return None
    
     def send_file(self, certhash, sensitivel, filepath, filename=None, name=None):
@@ -146,7 +146,7 @@ class SCNSender(object):
         resp = self.do_requestdo("/chat_{}/file".format(sensname), body, certhash=certhash)
         if resp and resp.status == 200:
             body["filepath"] = filepath
-            return writeStuff(self.basepath, certhash, body, True, ticketnumber=body["fileid"], writedisk=sensitivel==0, name=name)
+            return writeStuff(self.basedir, certhash, body, True, ticketnumber=body["fileid"], writedisk=sensitivel==0, name=name)
         return None
 
 async def _loadfromdir(fpath, func, data):
