@@ -5,6 +5,7 @@ kivy.require('1.9.1')
 import threading
 import os
 import io
+import json
 
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
@@ -18,6 +19,9 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
 from kivy.properties import ListProperty
+#from kivy.uix.behaviors import DragBehavior
+from kivy.graphics import Color
+from  kivy.graphics.vertex_instructions import Point
 #, StringProperty
 
 from simplescn.scnrequest import Requester
@@ -44,6 +48,7 @@ def genHandler(rootwidget, chatdirectory):
 class ChatTreeNode(FloatLayout, TreeViewNode):
     def __init__(self, indict, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        print(indict)
         if indict["owner"]:
             size = (0.7, 1)
             pos = {"x": 0.3, "y":0}
@@ -52,11 +57,11 @@ class ChatTreeNode(FloatLayout, TreeViewNode):
             pos = {"x": 0, "y":0}
         if indict["type"] == "text":
             self.height = 30
-            self.child = Label(text=indict["text"], size_hint=size, pos_hint=pos)
+            self.add_widget(Label(text=indict["text"], size_hint=size, pos_hint=pos))
         elif indict["type"] == "image":
             self.height = 100
             l = io.BytesIO(bytes(indict["image"], "utf-8"))
-            self.child = Image(source=l, size_hint=size, pos_hint=pos)
+            self.add_widget(Image(source=l, size_hint=size, pos_hint=pos))
         elif indict["type"] == "file":
             pass
         else:
@@ -64,6 +69,7 @@ class ChatTreeNode(FloatLayout, TreeViewNode):
 
 class FriendTreeNode(GridLayout, TreeViewNode):
     entry = None
+
     def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entry = entry
@@ -73,12 +79,30 @@ class FriendTreeNode(GridLayout, TreeViewNode):
         self.add_widget(Label(text=self.entry[4]))
 
     def on_touch_down(self, touch):
-        ids = App.get_running_app().root.ids
-        if touch.is_double_tap:
+        if touch.is_triple_tap:
+            pass
+        elif touch.is_double_tap:
+            ids = App.get_running_app().root.ids
             ids["convershash"].text = self.entry[1]
             ids["screenman"].current = "chats"
             ids["chatbutton"].state = "down"
             ids["serverbutton"].state = "normal"
+        else:
+            #super(TreeViewNode, self). on_touch_down(touch)
+            touch.grab(self)
+    
+    def on_touch_move(self, touch):
+        if touch.grab_current is self:
+            root = App.get_running_app().root
+            with root.canvas:
+                Color(1, 0, 0, 1)
+                Point(points=[*self.to_window(*touch.pos)], pointsize=30)
+        else:
+            super(TreeViewNode, self). on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            touch.ungrab(self)
 
 class ServerTreeNode(Label, TreeViewNode):
     def __init__(self, entry, *args, **kwargs):
@@ -91,12 +115,27 @@ class ServerTreeNode(Label, TreeViewNode):
             self.text=self.entry[0]
 
     def on_touch_down(self, touch):
-        ids = App.get_running_app().root.ids
-        if touch.is_double_tap:
+        if touch.is_triple_tap:
+            pass
+        elif touch.is_double_tap:
+            ids = App.get_running_app().root.ids
             ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
             ids["screenman"].current = "chats"
             ids["chatbutton"].state = "down"
             ids["serverbutton"].state = "normal"
+        else:
+            touch.grab(self)
+    
+    def on_touch_move(self, touch):
+        if touch.grab_current is self:
+            root = App.get_running_app().root
+            with root.canvas:
+                Color(1, 0, 0, 1)
+                Point(points=[*self.to_window(*touch.pos)], pointsize=30)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            touch.ungrab(self)
 
 
 
@@ -106,7 +145,14 @@ class ChatAvailTreeNode(GridLayout, TreeViewNode):
         super().__init__(*args, **kwargs)
         self.certhash = certhash
         # name
-        self.add_widget(Label(text=self.certhash))
+        b = Button(text=self.certhash)
+        b.bind(on_press=self.load_conversation)
+        self.add_widget(b)
+    
+    def load_conversation(self, instance):
+        root = App.get_running_app().root
+        root.ids["convershash"].text = self.certhash
+
 
 class ImageDialog(FloatLayout):
     def __init__(self, *args, **kwargs):
@@ -161,6 +207,7 @@ class MainWidget(FloatLayout):
             self.cur_name, self.cur_hash = splitted
         else:
             self.cur_name, self.cur_hash = None, splitted[0]
+        self.load_conversation()
 
     def set_sensitivelabel(self, widget):
         val = int(widget.value)
@@ -277,6 +324,30 @@ class MainWidget(FloatLayout):
         for centry in os.listdir(self.pathchats):
             if check_hash(centry):
                 wid.add_node(ChatAvailTreeNode(centry))
+ 
+    def load_conversation(self):
+        _hash = self.cur_hash
+        if not check_hash(_hash):
+            return
+        p = os.path.join(self.pathchats, _hash)
+        os.makedirs(p, mode=0o700, exist_ok=True)
+        wid = self.ids.get("chathist")
+        for node in wid.iterate_all_nodes():
+            wid.remove_node(node)
+        setnum = set()
+        setnum.update(filter(lambda x: x.split(".", 1)[0].isdecimal(), os.listdir(p)))
+        hbuf = chatscn.messagebuffer.get(_hash, {})
+        setnum.update(hbuf.keys())
+        for num in sorted(setnum):
+            if num in hbuf:
+                wid.add_node(ChatTreeNode(hbuf[num]))
+            elif isinstance(num, str) and os.path.exists(os.path.join(p, num)):
+                with open(os.path.join(p, num), "r") as ro:
+                    try:
+                        wid.add_node(ChatTreeNode(json.load(ro)))
+                    except Exception as exc:
+                        print(exc)
+
 
 class ChatSCNApp(App):
     requester = None
@@ -289,9 +360,11 @@ class ChatSCNApp(App):
         self.root.pathchats = os.path.join(self.user_data_dir, "chats")
         os.makedirs(self.root.pathchats, mode=0o700, exist_ok=True)
         self.root.requester = chatscn.SCNSender(self.requester, self.root.pathchats)
-        MainWidget.hserver = chatscn.init(self.root.requester, genHandler(self.root, MainWidget.pathchats))
+        MainWidget.hserver = chatscn.init(self.root.requester, genHandler(self.root, self.root.pathchats))
         if not MainWidget.hserver:
             raise
+        # on enter fires only if switched
+        self.root.load_avail_chats()
 
     def build(self):
         self.title = "ChatSCN"

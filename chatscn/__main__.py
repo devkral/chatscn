@@ -10,11 +10,11 @@ if thisdir not in sys.path:
     sys.path.insert(0, thisdir)
 
 def openfoo(modulename, address, use_unix):
-    try:
+    #try:
         module = importlib.import_module(modulename, "chatscn.__main__")
         module.open(address, use_unix)
-    except ImportError:
-        return False
+    #except ImportError:
+    #    return False
 
 def open_gui(address, use_unix):
     if openfoo("chatkivy", address, use_unix):

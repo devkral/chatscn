@@ -221,7 +221,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             ret["sensitivity"] = 0
             self.send_response(200)
             self.end_headers()
-            self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=True))
+            self.notify(writeStuff(self.basedir, self.certtupel[1], ret, False, writedisk=True))
         else:
             self.send_error(411) 
 

@@ -1,6 +1,7 @@
 <FriendTreeNode>:
     rows: 1
     height: 30
+    drag_rectangle: self.x, self.y, self.width, self.height
 
 <ChatAvailTreeNode>:
     rows: 1
@@ -8,6 +9,8 @@
 
 <ServerTreeNode>
     height: 30
+    drag_rectangle: self.x, self.y, self.width, self.height
+
 
 <ImageDialog>
     BoxLayout:
@@ -52,17 +55,17 @@ MainWidget:
         size_hint: 0.98, 0.06
         ToggleButton:
             text: 'Chats'
-            on_press: screenman.current="chats"
+            on_press: screenman.current="chats"; 
             group: "chatsv"
             state: "down"
-            allow_no_selection: True
+            allow_no_selection: False
             id: chatbutton
 
         ToggleButton:
             text: 'Server & Friends'
             on_press: screenman.current="server"
             group: "chatsv"
-            allow_no_selection: True
+            allow_no_selection: False
             id: serverbutton
 
         FloatLayout:
@@ -96,11 +99,16 @@ MainWidget:
         id: screenman
         Screen:
             name: 'chats'
-            #on_enter: 
+            on_enter: app.async_load(root.load_avail_chats)
             FloatLayout:
+                #Splitter:
+                #    
+                #    horizontal: True
+                #    sizable_from: "right"
+                #    on_release: chatview.x = self.x+self.width
                 ScrollView:
-                    pos_hint: {"x": 0, 'y': 0.1}
-                    size_hint: 0.3, 0.9
+                    pos_hint: {"x": 0, 'y': 0}
+                    size_hint: 0.3, 1
                     TreeView:
                         id: chatfriends
                         root_options: {"text": "Chats"}
