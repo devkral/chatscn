@@ -328,6 +328,6 @@ def init(srequester, handler):
         return None
     handler.forcehash = resp[3][1]
     threading.Thread(target=hserver.serve_forever, daemon=True).start()
-    srequester.requester.saved_kwargs["forcehash"] = resp[3][1]
-    srequester.requester.saved_kwargs["ownhash"] = resp[3][1]
+    srequester.requester.p.keywords["forcehash"] = resp[3][1]
+    srequester.requester.p.keywords["ownhash"] = resp[3][1]
     return hserver

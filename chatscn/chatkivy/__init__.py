@@ -20,8 +20,8 @@ from kivy.uix.label import Label
 from kivy.uix.image import Image
 from kivy.properties import ListProperty
 #from kivy.uix.behaviors import DragBehavior
-from kivy.graphics import Color
-from  kivy.graphics.vertex_instructions import Point
+#from kivy.graphics import Color
+#from  kivy.graphics.vertex_instructions import Point
 #, StringProperty
 
 from simplescn.scnrequest import Requester
@@ -87,22 +87,8 @@ class FriendTreeNode(GridLayout, TreeViewNode):
             ids["screenman"].current = "chats"
             ids["chatbutton"].state = "down"
             ids["serverbutton"].state = "normal"
-        else:
-            #super(TreeViewNode, self). on_touch_down(touch)
-            touch.grab(self)
-    
-    def on_touch_move(self, touch):
-        if touch.grab_current is self:
-            root = App.get_running_app().root
-            with root.canvas:
-                Color(1, 0, 0, 1)
-                Point(points=[*self.to_window(*touch.pos)], pointsize=30)
-        else:
-            super(TreeViewNode, self). on_touch_move(touch)
+        #    super(TreeViewNode, self). on_touch_move(touch)
 
-    def on_touch_up(self, touch):
-        if touch.grab_current is self:
-            touch.ungrab(self)
 
 class ServerTreeNode(Label, TreeViewNode):
     def __init__(self, entry, *args, **kwargs):
@@ -123,19 +109,6 @@ class ServerTreeNode(Label, TreeViewNode):
             ids["screenman"].current = "chats"
             ids["chatbutton"].state = "down"
             ids["serverbutton"].state = "normal"
-        else:
-            touch.grab(self)
-    
-    def on_touch_move(self, touch):
-        if touch.grab_current is self:
-            root = App.get_running_app().root
-            with root.canvas:
-                Color(1, 0, 0, 1)
-                Point(points=[*self.to_window(*touch.pos)], pointsize=30)
-
-    def on_touch_up(self, touch):
-        if touch.grab_current is self:
-            touch.ungrab(self)
 
 
 
@@ -229,7 +202,7 @@ class MainWidget(FloatLayout):
         serverurlt = serverurlw.text
         if serverurlt == "":
             return
-        reg1 = self.requester.requester.do_request_simple("/client/register", {"server": serverurlt}, {})
+        reg1 = self.requester.requester.do_request("/client/register", {"server": serverurlt}, {})
         if logcheck(reg1):
             self.load_servernames()
 
@@ -270,13 +243,13 @@ class MainWidget(FloatLayout):
 
 
     def load_friends(self):
-        lnames1 = self.requester.requester.do_request_simple("/client/listnodeall", {"filter": "client"}, {})
+        lnames1 = self.requester.requester.do_request("/client/listnodeall", {"filter": "client"}, {})
         if not logcheck(lnames1):
             return
         wid = self.ids.get("friendlist")
         for node in wid.iterate_all_nodes():
             wid.remove_node(node)
-        for entry in lnames1[1]["items"]:
+        for entry in lnames1[2]["items"]:
             wid.add_node(FriendTreeNode(entry))
 
     def load_servernames(self):
@@ -285,18 +258,18 @@ class MainWidget(FloatLayout):
         nameofserver = self.ids["nameofserver"]
         nameofserver.text = ""
         _reqserver = serverurlw.text
-        lnames1 = self.requester.requester.do_request_simple("/client/listnames", {"server": _reqserver}, {})
+        lnames1 = self.requester.requester.do_request("/client/listnames", {"server": _reqserver}, {})
         if not logcheck(lnames1):
             if _reqserver != "":
                 serverurlw.background_color = (1., 0., 0., 1.)
             return
         self.requester.cur_server = _reqserver
-        if not lnames1[2]:
+        if not lnames1[3][0]:
             nameofserver.text = "unknown"
-        elif lnames1[2] is isself:
+        elif lnames1[3][0] is isself:
             nameofserver.text = "Own client"
         else:
-            nameofserver.text = "Identified as:\n{}".format(lnames1[2][0])
+            nameofserver.text = "Identified as:\n{}".format(lnames1[3][0][0])
         wid = self.ids.get("serverlist")
         for node in wid.iterate_all_nodes():
             if node.parent_node:
@@ -353,10 +326,10 @@ class ChatSCNApp(App):
     requester = None
     def __init__(self, address, use_unix, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.requester = Requester(default_addrcon=address, use_unix=use_unix)
+        self.requester = Requester(addrcon=address, use_unix=use_unix)
         
     def on_start(self):
-        self.requester.saved_kwargs["pwhandler"] = self.root.pwhandler
+        self.requester.p.keywords["pwhandler"] = self.root.pwhandler
         self.root.pathchats = os.path.join(self.user_data_dir, "chats")
         os.makedirs(self.root.pathchats, mode=0o700, exist_ok=True)
         self.root.requester = chatscn.SCNSender(self.requester, self.root.pathchats)
