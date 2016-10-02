@@ -164,7 +164,7 @@ class MainWidget(FloatLayout):
     _popup = None
 
     def __init__(self, *args, **kwargs):
-        super().__init__( *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def pwhandler(self, msg):
         self._popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
@@ -276,7 +276,7 @@ class MainWidget(FloatLayout):
                 wid.remove_node(node)
         entryfriends = set()
         self.ids["registerserverb"].text = "Register"
-        for entry in lnames1[1]["items"]:
+        for entry in lnames1[2]["items"]:
             if entry[2] != "valid":
                 continue
             if entry[3]:
@@ -324,17 +324,14 @@ class MainWidget(FloatLayout):
 
 class ChatSCNApp(App):
     requester = None
-    def __init__(self, address, use_unix, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.requester = Requester(addrcon=address, use_unix=use_unix)
-        
+
     def on_start(self):
         self.requester.p.keywords["pwhandler"] = self.root.pwhandler
         self.root.pathchats = os.path.join(self.user_data_dir, "chats")
         os.makedirs(self.root.pathchats, mode=0o700, exist_ok=True)
         self.root.requester = chatscn.SCNSender(self.requester, self.root.pathchats)
-        MainWidget.hserver = chatscn.init(self.root.requester, genHandler(self.root, self.root.pathchats))
-        if not MainWidget.hserver:
+        self.root.hserver = chatscn.init(self.root.requester, genHandler(self.root, self.root.pathchats))
+        if not self.root.hserver:
             raise
         # on enter fires only if switched
         self.root.load_avail_chats()
@@ -346,6 +343,7 @@ class ChatSCNApp(App):
     def async_load(self, func,  *args, **kwargs):
         threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True).start()
 
-def open(address, use_unix):
-    bal = ChatSCNApp(address, use_unix)
+def openchat(address, use_unix):
+    bal = ChatSCNApp()
+    bal.requester = Requester(addrcon=address, use_unix=use_unix)
     bal.run()

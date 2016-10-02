@@ -12,7 +12,7 @@ if thisdir not in sys.path:
 def openfoo(modulename, address, use_unix):
     #try:
         module = importlib.import_module(modulename, "chatscn.__main__")
-        module.open(address, use_unix)
+        module.openchat(address, use_unix)
     #except ImportError:
     #    return False
 
