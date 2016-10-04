@@ -30,8 +30,6 @@ if __name__ == "__main__":
         p = getlocalclient()
         if not p:
             ret = start.client([], doreturn=True)
-            if ret:
-                start.running_instances.append(ret)
             p = getlocalclient()
         if p:
             open_gui(*p)

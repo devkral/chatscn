@@ -28,13 +28,13 @@ def getticket(path, nonewticket=False):
     with simplelock:
         os.makedirs(path, 0o700, exist_ok=True)
         try:
-            with open(os.path.join(path, "number"), "rw") as rowob:
+            with open(os.path.join(path, "number"), "r+") as rowob:
                 number = int(rowob.read()) + 1
                 if not nonewticket:
                     rowob.seek(0, 0)
                     rowob.write(str(number))
                 return number
-        except:
+        except Exception:
             if not nonewticket:
                 with open(os.path.join(path, "number"), "w") as rowob:
                     rowob.write("0")
@@ -134,7 +134,7 @@ class SCNSender(object):
             body["filepath"] = filepath
             return writeStuff(self.basedir, certhash, body, True, writedisk=sensitivel==0)
         return None
-   
+
     def send_file(self, certhash, sensitivel, filepath, filename=None, name=None):
         body = {"type": "file", "sensitivity": sensitivel}
         if filename:
@@ -223,7 +223,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             self.end_headers()
             self.notify(writeStuff(self.basedir, self.certtupel[1], ret, False, writedisk=True))
         else:
-            self.send_error(411) 
+            self.send_error(411)
 
     def chat_private(self, send_type):
         if send_type not in allowed_types:
@@ -236,7 +236,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             ret["sensitivity"] = 1
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
         else:
-            self.send_error(411) 
+            self.send_error(411)
 
     def chat_sensitive(self, send_type):
         if send_type not in allowed_types:
@@ -252,7 +252,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             ret["sensitivity"] = 2
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
         else:
-            self.send_error(411) 
+            self.send_error(411)
 
     def send_file(self, fileid: str):
         if not fileid.isdecimal():
@@ -296,16 +296,18 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         self.end_headers()
         self.connection.send_file(path, offset, countbytes)
 
-    def do_POST(self):
-        if self.path == "/wrapping":
-            self.wrap()
-            return
+    def do_GET(self):
         if self.path in {"/", "/index"}:
             ob = self.webversion("index.html")
             self.send_response(200)
             self.send_header("Content-Length", str(len(ob)))
             self.end_headers()
             self.wfile.write(ob)
+            return
+
+    def do_POST(self):
+        if self.path == "/wrapping":
+            self.wrap()
             return
 
         splitted = self.path[1:].split("/", 1)

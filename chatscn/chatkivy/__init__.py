@@ -6,10 +6,11 @@ import threading
 import os
 import io
 import json
+import logging
 
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
-from kivy.uix.treeview import TreeViewNode
+#from kivy.uix.treeview import TreeViewNode
 from kivy.uix.gridlayout import GridLayout
 #from kivy.uix.boxlayout import BoxLayout
 #from kivy.uix.widget import Widget
@@ -36,30 +37,35 @@ def genHandler(rootwidget, chatdirectory):
         root = rootwidget
         basedir = chatdirectory
         def notify(self, indict):
-            if self.root.cur_hash != indict["certhash"]:
-                return
-            chathist = self.root.ids["chathist"]
-            chathist.add_node(ChatTreeNode(indict))
+            self.root.notify(indict)
 
         def issensitive(self):
             return self.root.senslevel == 2
     return KivyHandler
 
-class ChatTreeNode(FloatLayout, TreeViewNode):
+class ScrollGrid(GridLayout):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bind(minimum_height=self.setter('height'))
+
+class ChatTreeNode(FloatLayout):
     def __init__(self, indict, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print(indict)
         if indict["owner"]:
-            size = (0.7, 1)
-            pos = {"x": 0.3, "y":0}
+            size = (0.6, 1)
+            pos = {"x": 0.2, "y":0}
+            #self.add_widget(Label(text="self", size_hint=(0.05, 1), pos_hint={"x": 0, "y":0}))
         else:
-            size = (0.7, 1)
+            size = (0.6, 1)
             pos = {"x": 0, "y":0}
         if indict["type"] == "text":
-            self.height = 30
-            self.add_widget(Label(text=indict["text"], size_hint=size, pos_hint=pos))
+            #self.height = 30*(indict["text"].count("\n")+1)
+            l = Label(text=indict["text"], size_hint=size, pos_hint=pos, halign='left')
+            self.add_widget(l)
+            l.texture_update()
+            #print(l.size, l.texture_size, self.size, self.pos, l.pos)
         elif indict["type"] == "image":
-            self.height = 100
+            #self.height = 100
             l = io.BytesIO(bytes(indict["image"], "utf-8"))
             self.add_widget(Image(source=l, size_hint=size, pos_hint=pos))
         elif indict["type"] == "file":
@@ -67,7 +73,7 @@ class ChatTreeNode(FloatLayout, TreeViewNode):
         else:
             raise
 
-class FriendTreeNode(GridLayout, TreeViewNode):
+class FriendTreeNode(GridLayout):
     entry = None
 
     def __init__(self, entry, *args, **kwargs):
@@ -90,7 +96,7 @@ class FriendTreeNode(GridLayout, TreeViewNode):
         #    super(TreeViewNode, self). on_touch_move(touch)
 
 
-class ServerTreeNode(Label, TreeViewNode):
+class ServerTreeNode(Label):
     def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entry = entry
@@ -112,7 +118,7 @@ class ServerTreeNode(Label, TreeViewNode):
 
 
 
-class ChatAvailTreeNode(GridLayout, TreeViewNode):
+class ChatAvailTreeNode(GridLayout):
     certhash = None
     def __init__(self, certhash, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -121,7 +127,7 @@ class ChatAvailTreeNode(GridLayout, TreeViewNode):
         b = Button(text=self.certhash)
         b.bind(on_press=self.load_conversation)
         self.add_widget(b)
-    
+
     def load_conversation(self, instance):
         root = App.get_running_app().root
         root.ids["convershash"].text = self.certhash
@@ -136,7 +142,7 @@ class FileDialog(FloatLayout):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.on_buttons(self.buttons, self.buttons)
-    
+
     def on_buttons(self, instance, value):
         if "selectedfile" not in self.ids:
             return
@@ -166,14 +172,24 @@ class MainWidget(FloatLayout):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def notify(self, indict):
+        if not indict:
+            return
+        if self.cur_hash != indict["certhash"]:
+            #wi = self.ids["chatfriends"]
+            #wi.add_widget()
+            return
+        chathist = self.ids["chathist"]
+        chathist.add_node(ChatTreeNode(indict))
+
     def pwhandler(self, msg):
         self._popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
         self._popup.open()
-    
+
     def dismiss_popup(self):
         if self._popup:
             self._popup.dismiss()
-    
+
     def set_namehash(self, text):
         splitted= text.rsplit("/", 1)
         if len(splitted) == 2:
@@ -213,6 +229,7 @@ class MainWidget(FloatLayout):
         ret = self.requester.send_text(self.cur_hash, self.senslevel, chattext.text, name=self.cur_name)
         if ret:
             chattext.text = ""
+            self.notify(ret)
 
     def send_image(self):
         self._popup = Popup(title="Load Image", content=ImageDialog(), size_hint=(0.9, 0.9))
@@ -226,20 +243,24 @@ class MainWidget(FloatLayout):
             return
         if caption.strip() == "":
             caption = None
-        self.requester.send_image(self.cur_hash, self.senslevel, selectedfiles[0], caption=caption, name=self.cur_name)
+        ret = self.requester.send_image(self.cur_hash, self.senslevel, selectedfiles[0], caption=caption, name=self.cur_name)
+        if ret:
+            self.notify(ret)
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection: self.dismiss_popup())]
         self._popup = Popup(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
         self._popup.open()
-    
+
     def _send_file(self, selectedfiles):
         self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
         if self.cur_hash == "":
             return
-        self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0], name=self.cur_name)
+        ret = self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0], name=self.cur_name)
+        if ret:
+            self.notify(ret)
 
 
     def load_friends(self):
@@ -247,10 +268,9 @@ class MainWidget(FloatLayout):
         if not logcheck(lnames1):
             return
         wid = self.ids.get("friendlist")
-        for node in wid.iterate_all_nodes():
-            wid.remove_node(node)
+        wid.clear_widgets()
         for entry in lnames1[2]["items"]:
-            wid.add_node(FriendTreeNode(entry))
+            wid.add_widget(FriendTreeNode(entry))
 
     def load_servernames(self):
         serverurlw = self.ids["serveraddressinp"]
@@ -271,9 +291,7 @@ class MainWidget(FloatLayout):
         else:
             nameofserver.text = "Identified as:\n{}".format(lnames1[3][0][0])
         wid = self.ids.get("serverlist")
-        for node in wid.iterate_all_nodes():
-            if node.parent_node:
-                wid.remove_node(node)
+        wid.clear_widgets()
         entryfriends = set()
         self.ids["registerserverb"].text = "Register"
         for entry in lnames1[2]["items"]:
@@ -287,17 +305,16 @@ class MainWidget(FloatLayout):
                     continue
                 else:
                     entryfriends.add(entry[3])
-            wid.add_node(ServerTreeNode(entry))
+            wid.add_widget(ServerTreeNode(entry))
 
     def load_avail_chats(self):
         os.makedirs(self.pathchats, mode=0o700, exist_ok=True)
         wid = self.ids.get("chatfriends")
-        for node in wid.iterate_all_nodes():
-            wid.remove_node(node)
+        wid.clear_widgets()
         for centry in os.listdir(self.pathchats):
             if check_hash(centry):
-                wid.add_node(ChatAvailTreeNode(centry))
- 
+                wid.add_widget(ChatAvailTreeNode(centry))
+
     def load_conversation(self):
         _hash = self.cur_hash
         if not check_hash(_hash):
@@ -305,21 +322,28 @@ class MainWidget(FloatLayout):
         p = os.path.join(self.pathchats, _hash)
         os.makedirs(p, mode=0o700, exist_ok=True)
         wid = self.ids.get("chathist")
-        for node in wid.iterate_all_nodes():
-            wid.remove_node(node)
-        setnum = set()
-        setnum.update(filter(lambda x: x.split(".", 1)[0].isdecimal(), os.listdir(p)))
+        wid.clear_widgets()
         hbuf = chatscn.messagebuffer.get(_hash, {})
-        setnum.update(hbuf.keys())
+        setnum = []
+        for elem in os.listdir(p):
+            splitted = elem.split(".", 1)
+            if splitted[0].isdecimal():
+                setnum.append(int(splitted[0]))
+        setnum += hbuf.keys()
         for num in sorted(setnum):
+            if not isinstance(num, int):
+                print(num, "wrong type", type(num))
+                continue
             if num in hbuf:
-                wid.add_node(ChatTreeNode(hbuf[num]))
-            elif isinstance(num, str) and os.path.exists(os.path.join(p, num)):
-                with open(os.path.join(p, num), "r") as ro:
-                    try:
-                        wid.add_node(ChatTreeNode(json.load(ro)))
-                    except Exception as exc:
-                        print(exc)
+                wid.add_widget(ChatTreeNode(hbuf[num]))
+            else:
+                jp = os.path.join(p, "{}.json".format(num))
+                if os.path.exists(jp):
+                    with open(jp, "r") as ro:
+                        try:
+                            wid.add_widget(ChatTreeNode(json.load(ro)))
+                        except Exception:
+                            logging.error("%s caused error", jp)
 
 
 class ChatSCNApp(App):
@@ -339,6 +363,8 @@ class ChatSCNApp(App):
     def build(self):
         self.title = "ChatSCN"
         self.icon = os.path.join(chatscn.thisdir, 'icon.png')
+        #ch = self.root.ids["chathist"]
+        #ch.bind(minimum_height=ch.setter('height'))
 
     def async_load(self, func,  *args, **kwargs):
         threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True).start()
