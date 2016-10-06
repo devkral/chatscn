@@ -34,7 +34,7 @@ def getticket(path, nonewticket=False):
                     rowob.seek(0, 0)
                     rowob.write(str(number))
                 return number
-        except Exception:
+        except:
             if not nonewticket:
                 with open(os.path.join(path, "number"), "w") as rowob:
                     rowob.write("0")

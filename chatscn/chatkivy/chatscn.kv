@@ -1,6 +1,7 @@
 <FriendTreeNode>:
-    rows: 1
+    #rows: 1
     height: 30
+    #border: (0, 0, 0, 0)
 
 <ChatAvailTreeNode>
     rows: 1
@@ -12,6 +13,11 @@
 <ScrollGrid>
     size_hint: 1, None
     cols: 1
+    row_default_height: 30
+
+<ScrollTree>
+    size_hint: 1, None
+    hide_root: True
 
 <ImageDialog>
     BoxLayout:

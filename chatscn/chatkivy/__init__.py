@@ -10,7 +10,7 @@ import logging
 
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
-#from kivy.uix.treeview import TreeViewNode
+from kivy.uix.treeview import TreeView#, TreeViewNode
 from kivy.uix.gridlayout import GridLayout
 #from kivy.uix.boxlayout import BoxLayout
 #from kivy.uix.widget import Widget
@@ -20,7 +20,7 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
 from kivy.properties import ListProperty
-#from kivy.uix.behaviors import DragBehavior
+from kivy.uix.bubble import BubbleButton, Bubble
 #from kivy.graphics import Color
 #from  kivy.graphics.vertex_instructions import Point
 #, StringProperty
@@ -48,7 +48,41 @@ class ScrollGrid(GridLayout):
         super().__init__(*args, **kwargs)
         self.bind(minimum_height=self.setter('height'))
 
-class ChatTreeNode(FloatLayout):
+class ScrollTree(TreeView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bind(minimum_height=self.setter('height'))
+
+
+class UseBubble(object):
+    bubble = None
+
+    def openbubble(self, buttonfunclist):
+        if self.bubble:
+            logging.error("Bubble already called")
+            return
+        self.bubble = Bubble(height=30, pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
+        for text, func in buttonfunclist:
+            button = BubbleButton(text=text, height=30)
+            self.call(button, func)
+            self.bubble.add_widget(button)
+        root = App.get_running_app().root
+        #self.get_root_window().add_widget(self.bubble, root.canvas)
+        root.add_widget(self.bubble)
+
+    def closebubble(self):
+        if self.bubble:
+            #self.get_root_window().remove_widget(self.bubble)
+            root = App.get_running_app().root
+            root.clear_widgets([self.bubble])
+            self.bubble = None
+    def call(self, button, funccall):
+        def _call(instance):
+            self.closebubble()
+            return funccall()
+        button.bind(on_press=_call)
+
+class ChatNode(FloatLayout):
     def __init__(self, indict, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if indict["owner"]:
@@ -73,48 +107,84 @@ class ChatTreeNode(FloatLayout):
         else:
             raise
 
-class FriendTreeNode(GridLayout):
+class FriendTreeNode(UseBubble, Button):
     entry = None
 
     def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entry = entry
+        #self.border=(0, 0, 0, 0)
         # name
-        self.add_widget(Label(text=self.entry[0]))
+        self.text=self.entry[0]
         # security
-        self.add_widget(Label(text=self.entry[4]))
+        if self.entry[4] != "valid":
+            self.color = (1, 0, 0, 1)
+        #self.add_widget(Label(text=self.entry[4]))
 
-    def on_touch_down(self, touch):
-        if touch.is_triple_tap:
-            pass
-        elif touch.is_double_tap:
-            ids = App.get_running_app().root.ids
-            ids["convershash"].text = self.entry[1]
-            ids["screenman"].current = "chats"
-            ids["chatbutton"].state = "down"
-            ids["serverbutton"].state = "normal"
-        #    super(TreeViewNode, self). on_touch_move(touch)
+    def on_press(self):
+        if self.bubble:
+            self.closebubble()
+        else:
+            self.openbubble([("Load", self.load_friend), ("Delete", self.delete_friend)])
+
+    def load_friend(self):
+        ids = App.get_running_app().root.ids
+        ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
+        ids["screenman"].current = "chats"
+        ids["chatbutton"].state = "down"
+        ids["serverbutton"].state = "normal"
+
+    def delete_friend(self):
+        pass
+
+    def delete_friend_aftercheck(self):
+        pass
+
+        #super(TreeViewNode, self). on_touch_move(touch)
 
 
-class ServerTreeNode(Label):
+class ServerTreeNode(UseBubble, Button):
     def __init__(self, entry, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entry = entry
         # name
         if self.entry[3]:
-            self.text = "{} ({})".format(self.entry[3], self.entry[0])
+            self.text = self.entry[3]
+            self.color = (0, 1, 0, 1)
         else:
-            self.text=self.entry[0]
+            self.text = self.entry[0]
 
-    def on_touch_down(self, touch):
-        if touch.is_triple_tap:
-            pass
-        elif touch.is_double_tap:
-            ids = App.get_running_app().root.ids
-            ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
-            ids["screenman"].current = "chats"
-            ids["chatbutton"].state = "down"
-            ids["serverbutton"].state = "normal"
+    def on_press(self):
+        if self.bubble:
+            self.closebubble()
+        else:
+            l = [("Load", self.load_server)]
+            if not self.entry[3]:
+                l.append(("Add", self.add_friend))
+            else:
+                l.append(("Add server", self.add_friend))
+            self.openbubble(l)
+
+    def add_friend(self):
+        root = App.get_running_app().root
+        if not self.entry[3]:
+            ret = root.requester.requester.do_request("/client/addentity", {"name": self.entry[0]}, {})
+            if not logcheck(ret):
+                return
+        d = {"name": self.entry[0], "hash": self.entry[1], "type": "client"}
+        root.requester.requester.do_request("/client/addhash", d, {})
+        text = root.requester.cur_server
+        d2 = {"hash": self.entry[1], "referencetype": "surl", "reference": text}
+        root.requester.requester.do_request("/client/addreference", d2, {})
+        d3 = {"hash": self.entry[1], "referencetype": "sname", "reference": self.entry[0]}
+        root.requester.requester.do_request("/client/addreference", d3, {})
+
+    def load_server(self):
+        ids = App.get_running_app().root.ids
+        ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
+        ids["screenman"].current = "chats"
+        ids["chatbutton"].state = "down"
+        ids["serverbutton"].state = "normal"
 
 
 
@@ -180,7 +250,7 @@ class MainWidget(FloatLayout):
             #wi.add_widget()
             return
         chathist = self.ids["chathist"]
-        chathist.add_node(ChatTreeNode(indict))
+        chathist.add_widget(ChatNode(indict))
 
     def pwhandler(self, msg):
         self._popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
@@ -335,13 +405,13 @@ class MainWidget(FloatLayout):
                 print(num, "wrong type", type(num))
                 continue
             if num in hbuf:
-                wid.add_widget(ChatTreeNode(hbuf[num]))
+                wid.add_widget(ChatNode(hbuf[num]))
             else:
                 jp = os.path.join(p, "{}.json".format(num))
                 if os.path.exists(jp):
                     with open(jp, "r") as ro:
                         try:
-                            wid.add_widget(ChatTreeNode(json.load(ro)))
+                            wid.add_widget(ChatNode(json.load(ro)))
                         except Exception:
                             logging.error("%s caused error", jp)
 
