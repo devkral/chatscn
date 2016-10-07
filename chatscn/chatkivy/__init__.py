@@ -19,7 +19,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
-from kivy.properties import ListProperty
+from kivy.properties import ListProperty, StringProperty
 from kivy.uix.bubble import BubbleButton, Bubble
 #from kivy.graphics import Color
 #from  kivy.graphics.vertex_instructions import Point
@@ -61,7 +61,7 @@ class UseBubble(object):
         if self.bubble:
             logging.error("Bubble already called")
             return
-        self.bubble = Bubble(height=30, pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
+        self.bubble = Bubble(height=30, width=60*len(buttonfunclist), pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
         for text, func in buttonfunclist:
             button = BubbleButton(text=text, height=30)
             self.call(button, func)
@@ -81,6 +81,32 @@ class UseBubble(object):
             self.closebubble()
             return funccall()
         button.bind(on_press=_call)
+
+
+class DeleteDialog(FloatLayout):
+    buttons = ListProperty()
+    message = StringProperty()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.on_buttons(self.buttons, None)
+        self.on_message(self.message, None)
+
+    def on_buttons(self, instance, value):
+        if "buttonlist" not in self.ids:
+            return
+        for elem in self.buttons:
+            name, func = elem
+            b = Button(text=name)
+            b.bind(on_press=func())
+            self.ids["buttonlist"].add_widget(b)
+
+    def on_message(self, instance, value):
+        if "deletemsg" not in self.ids:
+            return
+        self.ids["deletemsg"].text = instance
+
+class HashDialog(FloatLayout):
+    pass
 
 class ChatNode(FloatLayout):
     def __init__(self, indict, *args, **kwargs):
@@ -115,7 +141,7 @@ class FriendTreeNode(UseBubble, Button):
         self.entry = entry
         #self.border=(0, 0, 0, 0)
         # name
-        self.text=self.entry[0]
+        self.text = self.entry[0]
         # security
         if self.entry[4] != "valid":
             self.color = (1, 0, 0, 1)
@@ -125,7 +151,7 @@ class FriendTreeNode(UseBubble, Button):
         if self.bubble:
             self.closebubble()
         else:
-            self.openbubble([("Load", self.load_friend), ("Delete", self.delete_friend)])
+            self.openbubble([("Load", self.load_friend), ("Rename", lambda:print("TODO")), ("Delete", self.delete_friend)])
 
     def load_friend(self):
         ids = App.get_running_app().root.ids
@@ -135,13 +161,20 @@ class FriendTreeNode(UseBubble, Button):
         ids["serverbutton"].state = "normal"
 
     def delete_friend(self):
-        pass
+        root = App.get_running_app().root
+        buttonlist = [("Delete", self.delete_friend_aftercheck), ("Cancel", root.dismiss_popup)]
+        msg = 'Really delete friend: "{}"?'.format(self.entry[0])
+        dia = DeleteDialog(message=msg, buttons=buttonlist)
+        root.popup = Popup(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
+        root.popup.open()
 
     def delete_friend_aftercheck(self):
-        pass
-
+        root = App.get_running_app().root
+        root.dismiss_popup()
+        ret = root.requester.requester.do_request("/client/delentity", {"name":self.entry[0]})
+        if logcheck(ret):
+            root.load_friends()
         #super(TreeViewNode, self). on_touch_move(touch)
-
 
 class ServerTreeNode(UseBubble, Button):
     def __init__(self, entry, *args, **kwargs):
@@ -158,21 +191,31 @@ class ServerTreeNode(UseBubble, Button):
         if self.bubble:
             self.closebubble()
         else:
-            l = [("Load", self.load_server)]
+            l = [("Load", self.load_server), ("Info", lambda: print("TODO"))]
             if not self.entry[3]:
-                l.append(("Add", self.add_friend))
+                l.append(("Add…", self.add_friend))
             else:
-                l.append(("Add server", self.add_friend))
+                l.append(("Update", self.update_friend))
             self.openbubble(l)
 
     def add_friend(self):
+        #TODO
+        self.add_friend_after(self.entry[0])
+
+    def add_friend_after(self, name):
         root = App.get_running_app().root
-        if not self.entry[3]:
-            ret = root.requester.requester.do_request("/client/addentity", {"name": self.entry[0]}, {})
+        ret = root.requester.requester.do_request("/client/exist", {"name": name}, {})
+        if not ret[1]:
+            ret = root.requester.requester.do_request("/client/addentity", {"name": name}, {})
             if not logcheck(ret):
                 return
-        d = {"name": self.entry[0], "hash": self.entry[1], "type": "client"}
+        self.entry[3] = name
+        d = {"name": name, "hash": self.entry[1], "type": "client"}
         root.requester.requester.do_request("/client/addhash", d, {})
+        self.update_friend()
+
+    def update_friend(self):
+        root = App.get_running_app().root
         text = root.requester.cur_server
         d2 = {"hash": self.entry[1], "referencetype": "surl", "reference": text}
         root.requester.requester.do_request("/client/addreference", d2, {})
@@ -211,7 +254,7 @@ class FileDialog(FloatLayout):
     buttons = ListProperty()
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.on_buttons(self.buttons, self.buttons)
+        self.on_buttons(self.buttons, None)
 
     def on_buttons(self, instance, value):
         if "selectedfile" not in self.ids:
@@ -237,7 +280,7 @@ class MainWidget(FloatLayout):
     senslevel = 0
     cur_hash = ""
     cur_name = None
-    _popup = None
+    popup = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -253,12 +296,12 @@ class MainWidget(FloatLayout):
         chathist.add_widget(ChatNode(indict))
 
     def pwhandler(self, msg):
-        self._popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
-        self._popup.open()
+        self.popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
+        self.popup.open()
 
     def dismiss_popup(self):
-        if self._popup:
-            self._popup.dismiss()
+        if self.popup:
+            self.popup.dismiss()
 
     def set_namehash(self, text):
         splitted= text.rsplit("/", 1)
@@ -302,8 +345,8 @@ class MainWidget(FloatLayout):
             self.notify(ret)
 
     def send_image(self):
-        self._popup = Popup(title="Load Image", content=ImageDialog(), size_hint=(0.9, 0.9))
-        self._popup.open()
+        self.popup = Popup(title="Load Image", content=ImageDialog(), size_hint=(0.9, 0.9))
+        self.popup.open()
 
     def _send_image(self, selectedfiles, caption):
         self.dismiss_popup()
@@ -319,8 +362,8 @@ class MainWidget(FloatLayout):
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection: self.dismiss_popup())]
-        self._popup = Popup(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
-        self._popup.open()
+        self.popup = Popup(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
+        self.popup.open()
 
     def _send_file(self, selectedfiles):
         self.dismiss_popup()
@@ -437,6 +480,7 @@ class ChatSCNApp(App):
         #ch.bind(minimum_height=ch.setter('height'))
 
     def async_load(self, func,  *args, **kwargs):
+        # needed for kv file
         threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True).start()
 
 def openchat(address, use_unix):
