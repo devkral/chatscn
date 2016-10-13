@@ -124,10 +124,11 @@ class ListDialog(FloatLayout):
     def on_buttons(self, instance, value):
         if "viewlist" not in self.ids:
             return
+        viewlist = self.ids["viewlist"]
         for elem in self.buttons:
             name, func = elem
             b = Button(text=name)
-            b.bind(on_press=lambda butinstance: func(self.ids["viewlist"].selected_node.message))
+            b.bind(on_press=lambda butinstance: func(viewlist.selected_node.message))
             self.ids["buttonlist"].add_widget(b)
 
     def on_entries(self, instance, value):
