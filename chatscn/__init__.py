@@ -117,12 +117,8 @@ class SCNSender(object):
             return writeStuff(self.basedir, certhash, body, True, writedisk=sensitivel==0)
         return None
 
-    def send_image(self, certhash, sensitivel, filepath, imgname=None, caption=None, name=None):
+    def send_image(self, certhash, sensitivel, filepath, caption="", name=None):
         body = {"type": "image", "caption": caption, "sensitivity": sensitivel}
-        if imgname:
-            body["name"] = imgname
-        else:
-            body["name"] = os.path.basename(filepath)
         # TODO: convert/compress images, changeable size
         if os.path.stat(filepath).st_size > 8*1024*1024:
             logging.warning("image very big")

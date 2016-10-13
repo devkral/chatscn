@@ -1,3 +1,5 @@
+
+
 <FriendTreeNode>:
     #rows: 1
     height: 30
@@ -33,40 +35,37 @@
         size_hint: 1, 0.07
         id: buttonlist
 
-
-<HashDialog>
-    TreeListView:
-        pos_hint: {"x": 0, 'y': 0.1}
-        size_hint: 1, 0.9
-        id: viewhashes
+<ListDialog>
+    ScrollView:
+        pos_hint: {"x": 0, 'y': 0.8}
+        size_hint: 1, 0.91
+        bar_pos_y: "right"
+        bar_width: 10
+        ScrollTree:
+            id: viewlist
     BoxLayout:
         orientation: 'horizontal'
         pos: 0, 0
         pos_hint: {"x": 0, 'y': 0}
         size_hint: 1, 0.07
         id: buttonlist
-
-<ImageDialog>
-    BoxLayout:
-        orientation: 'horizontal'
-        pos: 0, 0
-        pos_hint: {"x": 0, 'y': 0.95}
-        size_hint: 1, 0.05
-        Label:
-            text: "Caption"
-        TextInput:
-            id: caption
-            multiline: False
-    FileDialog:
-        buttons: [("Send",  lambda selection: app.root._send_image(selection, caption)), ("Cancel", lambda selection: app.root.dismiss_popup())]
-        pos_hint: {"x": 0, 'y': 0}
-        size_hint: 1, 0.95
 
 <FileDialog>
+    Label:
+        id: namelabel
+        pos_hint: {"x": 0, 'y': 0.95}
+        size_hint: 0.4, 0.05
+    TextInput:
+        id: nameinput
+        pos_hint: {"x": 0.4, 'y': 0.93}
+        size_hint: 0.6, 0.07
+        multiline: False
+        padding: 1,0
     FileChooserListView:
         pos_hint: {"x": 0, 'y': 0.1}
-        size_hint: 1, 0.9
+        size_hint: 1, 0.82
         id: selectedfile
+        on_selection: root.select(self.selection)
     BoxLayout:
         orientation: 'horizontal'
         pos: 0, 0
@@ -74,7 +73,7 @@
         size_hint: 1, 0.07
         id: buttonlist
 
-<PwDialog>:
+<PwDialog>
     msg: msglabel.text
     Label:
         id: msglabel

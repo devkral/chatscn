@@ -10,7 +10,7 @@ import logging
 
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
-from kivy.uix.treeview import TreeView#, TreeViewNode
+from kivy.uix.treeview import TreeView, TreeViewNode, TreeViewLabel
 from kivy.uix.gridlayout import GridLayout
 #from kivy.uix.boxlayout import BoxLayout
 #from kivy.uix.widget import Widget
@@ -19,7 +19,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
-from kivy.properties import ListProperty, StringProperty
+from kivy.properties import ListProperty, StringProperty, BooleanProperty
 from kivy.uix.bubble import BubbleButton, Bubble
 #from kivy.graphics import Color
 #from  kivy.graphics.vertex_instructions import Point
@@ -43,6 +43,9 @@ def genHandler(rootwidget, chatdirectory):
             return self.root.senslevel == 2
     return KivyHandler
 
+class TreeViewButton(Button, TreeViewNode):
+    pass
+
 class ScrollGrid(GridLayout):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,14 +60,14 @@ class ScrollTree(TreeView):
 class UseBubble(object):
     bubble = None
 
-    def openbubble(self, buttonfunclist):
+    def openbubble(self, buttonfunclist, data=None):
         if self.bubble:
             logging.error("Bubble already called")
             return
         self.bubble = Bubble(height=30, width=60*len(buttonfunclist), pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
         for text, func in buttonfunclist:
             button = BubbleButton(text=text, height=30)
-            self.call(button, func)
+            self.call(button, func, data)
             self.bubble.add_widget(button)
         root = App.get_running_app().root
         #self.get_root_window().add_widget(self.bubble, root.canvas)
@@ -76,10 +79,13 @@ class UseBubble(object):
             root = App.get_running_app().root
             root.clear_widgets([self.bubble])
             self.bubble = None
-    def call(self, button, funccall):
+    def call(self, button, funccall, data):
         def _call(instance):
             self.closebubble()
-            return funccall()
+            if data:
+                return funccall(data)
+            else:
+                return funccall()
         button.bind(on_press=_call)
 
 
@@ -105,8 +111,62 @@ class DeleteDialog(FloatLayout):
             return
         self.ids["deletemsg"].text = instance
 
-class HashDialog(FloatLayout):
-    pass
+
+class ListDialog(FloatLayout):
+    buttons = ListProperty()
+    entries = ListProperty()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.on_entries(self.entries, None)
+        self.on_buttons(self.buttons, None)
+
+    def on_buttons(self, instance, value):
+        if "viewlist" not in self.ids:
+            return
+        for elem in self.buttons:
+            name, func = elem
+            b = Button(text=name)
+            b.bind(on_press=lambda butinstance: func(self.ids["viewlist"].selected_node.message))
+            self.ids["buttonlist"].add_widget(b)
+
+    def on_entries(self, instance, value):
+        if "viewlist" not in self.ids:
+            return
+        viewlist = self.ids["viewlist"]
+        for elem in self.entries:
+            lab = TreeViewLabel(text=elem[0])
+            lab.color = elem[1]
+            if len(elem) == 3:
+                lab.message = elem[2]
+            else:
+                lab.message = elem[0]
+            viewlist.add_node(lab)
+
+class FileEntry(Button):
+    def __init__(self,indict, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if indict["owner"]:
+            self.text = "Remove File: {}".format(indict["filepath"])
+            self.bind(on_press=self.remove)
+        else:
+            self.text = "Download File: {}".format(indict.get("name", ""))
+            self.bind(on_press=self.download)
+
+
+    def download(self, instance):
+        root = App.get_running_app().root
+        buttons = [("Download", self.download_afterask), ("Cancel", lambda x, y: root.dismiss_popup)]
+        dia = FileDialog(buttons=buttons, dirselect=True)
+        root.popup = Popup(title="Download", content=dia, size_hint=(0.9, 0.5))
+        root.popup.open()
+
+
+    def download_afterask(self, selection, name):
+        pass
+
+    def remove(self, instance):
+        pass
 
 class ChatNode(FloatLayout):
     def __init__(self, indict, *args, **kwargs):
@@ -129,22 +189,14 @@ class ChatNode(FloatLayout):
             l = io.BytesIO(bytes(indict["image"], "utf-8"))
             self.add_widget(Image(source=l, size_hint=size, pos_hint=pos))
         elif indict["type"] == "file":
-            pass
+            self.add_widget(FileEntry(indict, size_hint=size, pos_hint=pos))
         else:
             raise
 
 class FriendTreeNode(UseBubble, Button):
-    entry = None
-
-    def __init__(self, entry, *args, **kwargs):
+    def __init__(self, name, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.entry = entry
-        #self.border=(0, 0, 0, 0)
-        # name
-        self.text = self.entry[0]
-        # security
-        if self.entry[4] != "valid":
-            self.color = (1, 0, 0, 1)
+        self.text = name
         #self.add_widget(Label(text=self.entry[4]))
 
     def on_press(self):
@@ -154,8 +206,22 @@ class FriendTreeNode(UseBubble, Button):
             self.openbubble([("Load", self.load_friend), ("Rename", lambda:print("TODO")), ("Delete", self.delete_friend)])
 
     def load_friend(self):
+        self.closebubble()
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/listhashes", {"name": self.text, "filter": "client"}, {})
+        if not logcheck(ret):
+            return
+        buttons = [("Load", self.load_hash), ("Close", lambda x: root.dismiss_popup())]
+        newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (0, 0, 0, 1)), ret[2]["items"])
+        dia = ListDialog(entries=newlist, buttons=buttons)
+
+        root.popup = Popup(title="Hashes", content=dia, size_hint=(0.9, 0.5))
+        root.popup.open()
+
+
+    def load_hash(self, selected):
         ids = App.get_running_app().root.ids
-        ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
+        ids["convershash"].text = "{}/{}".format(self.text, selected)
         ids["screenman"].current = "chats"
         ids["chatbutton"].state = "down"
         ids["serverbutton"].state = "normal"
@@ -163,7 +229,7 @@ class FriendTreeNode(UseBubble, Button):
     def delete_friend(self):
         root = App.get_running_app().root
         buttonlist = [("Delete", self.delete_friend_aftercheck), ("Cancel", root.dismiss_popup)]
-        msg = 'Really delete friend: "{}"?'.format(self.entry[0])
+        msg = 'Really delete friend: "{}"?'.format(self.text)
         dia = DeleteDialog(message=msg, buttons=buttonlist)
         root.popup = Popup(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
@@ -171,7 +237,7 @@ class FriendTreeNode(UseBubble, Button):
     def delete_friend_aftercheck(self):
         root = App.get_running_app().root
         root.dismiss_popup()
-        ret = root.requester.requester.do_request("/client/delentity", {"name":self.entry[0]})
+        ret = root.requester.requester.do_request("/client/delentity", {"name":self.text})
         if logcheck(ret):
             root.load_friends()
         #super(TreeViewNode, self). on_touch_move(touch)
@@ -246,15 +312,32 @@ class ChatAvailTreeNode(GridLayout):
         root.ids["convershash"].text = self.certhash
 
 
-class ImageDialog(FloatLayout):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
 class FileDialog(FloatLayout):
     buttons = ListProperty()
+    label = StringProperty("Name")
+    text = StringProperty("")
+    dirselect = BooleanProperty(False)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.on_buttons(self.buttons, None)
+        self.on_label(self.label, None)
+        self.on_text(self.text, None)
+        self.on_dirselect(self.dirselect, None)
+
+    def on_dirselect(self, instance, value):
+        if "selectedfile" not in self.ids:
+            return
+        self.ids["selectedfile"].dirselect = instance
+
+    def on_label(self, instance, value):
+        if "namelabel" not in self.ids:
+            return
+        self.ids["namelabel"].text = instance
+
+    def on_text(self, instance, value):
+        if "nameinput" not in self.ids:
+            return
+        self.ids["nameinput"].text = instance
 
     def on_buttons(self, instance, value):
         if "selectedfile" not in self.ids:
@@ -262,8 +345,18 @@ class FileDialog(FloatLayout):
         for elem in self.buttons:
             name, func = elem
             b = Button(text=name)
-            b.bind(on_press=lambda butinstance: func(self.ids["selectedfile"].selection))
+            b.bind(on_press=lambda butinstance: func(self.ids["selectedfile"].selection, self.ids["nameinput"]))
             self.ids["buttonlist"].add_widget(b)
+
+    def select(self, selection):
+        if "nameinput" not in self.ids:
+            return
+        if not selection or len(selection) <= 0:
+            return
+        if os.path.isdir(selection[0]):
+            return
+        nameinput = self.ids["nameinput"]
+        nameinput.text = os.path.basename(selection[0])
 
 class ChatView(FloatLayout):
     pass
@@ -304,7 +397,7 @@ class MainWidget(FloatLayout):
             self.popup.dismiss()
 
     def set_namehash(self, text):
-        splitted= text.rsplit("/", 1)
+        splitted = text.rsplit("/", 1)
         if len(splitted) == 2:
             self.cur_name, self.cur_hash = splitted
         else:
@@ -345,7 +438,8 @@ class MainWidget(FloatLayout):
             self.notify(ret)
 
     def send_image(self):
-        self.popup = Popup(title="Load Image", content=ImageDialog(), size_hint=(0.9, 0.9))
+        buttons = [("Send", self._send_image), ("Cancel", lambda selection, x: self.dismiss_popup())]
+        self.popup = Popup(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"), size_hint=(0.9, 0.9))
         self.popup.open()
 
     def _send_image(self, selectedfiles, caption):
@@ -361,23 +455,23 @@ class MainWidget(FloatLayout):
             self.notify(ret)
 
     def send_file(self):
-        buttons = [("Send", self._send_file), ("Cancel", lambda selection: self.dismiss_popup())]
+        buttons = [("Send", self._send_file), ("Cancel", lambda selection, x: self.dismiss_popup())]
         self.popup = Popup(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
         self.popup.open()
 
-    def _send_file(self, selectedfiles):
+    def _send_file(self, selectedfiles, name):
         self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
         if self.cur_hash == "":
             return
-        ret = self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0], name=self.cur_name)
+        ret = self.requester.send_file(self.cur_hash, self.senslevel, selectedfiles[0], filename=name, name=self.cur_name)
         if ret:
             self.notify(ret)
 
 
     def load_friends(self):
-        lnames1 = self.requester.requester.do_request("/client/listnodeall", {"filter": "client"}, {})
+        lnames1 = self.requester.requester.do_request("/client/listnodenames", {"filter": "client"}, {})
         if not logcheck(lnames1):
             return
         wid = self.ids.get("friendlist")
@@ -445,7 +539,7 @@ class MainWidget(FloatLayout):
         setnum += hbuf.keys()
         for num in sorted(setnum):
             if not isinstance(num, int):
-                print(num, "wrong type", type(num))
+                logging.error("Error: wrong type %s (%s)", num, type(num))
                 continue
             if num in hbuf:
                 wid.add_widget(ChatNode(hbuf[num]))
