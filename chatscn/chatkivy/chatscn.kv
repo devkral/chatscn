@@ -6,8 +6,12 @@
     #border: (0, 0, 0, 0)
 
 <ChatAvailTreeNode>
-    rows: 1
     height: 30
+    #textsize: self.width-10,self.height-10
+    shorten_from: "left"
+    allow_no_selection: False
+    shorten: True
+
 
 <ServerTreeNode>
     height: 30
@@ -37,7 +41,7 @@
 
 <ListDialog>
     ScrollView:
-        pos_hint: {"x": 0, 'y': 0.8}
+        pos_hint: {"x": 0, 'y': 0.08}
         size_hint: 1, 0.91
         bar_pos_y: "right"
         bar_width: 10
@@ -89,7 +93,7 @@ MainWidget:
         size_hint: 0.98, 0.06
         ToggleButton:
             text: 'Chats'
-            on_press: screenman.current="chats";
+            on_press: screenman.current="chats"
             group: "chatsv"
             state: "down"
             allow_no_selection: False

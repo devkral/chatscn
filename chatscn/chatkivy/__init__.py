@@ -17,6 +17,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.popup import Popup
 from kivy.uix.button import Button
+from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.uix.image import Image
 from kivy.properties import ListProperty, StringProperty, BooleanProperty
@@ -56,29 +57,41 @@ class ScrollTree(TreeView):
         super().__init__(*args, **kwargs)
         self.bind(minimum_height=self.setter('height'))
 
-
 class UseBubble(object):
     bubble = None
-
+    callbackid = None
     def openbubble(self, buttonfunclist, data=None):
         if self.bubble:
             logging.error("Bubble already called")
             return
-        self.bubble = Bubble(height=30, width=60*len(buttonfunclist), pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
+        self.bubble = Bubble(height=30, width=10, pos=self.to_window(self.x, self.y+30), size_hint=(None, None))
         for text, func in buttonfunclist:
             button = BubbleButton(text=text, height=30)
+            self.bubble.width += 10 + len(text)*10
             self.call(button, func, data)
             self.bubble.add_widget(button)
         root = App.get_running_app().root
         #self.get_root_window().add_widget(self.bubble, root.canvas)
         root.add_widget(self.bubble)
+        self.callbackid = root.fbind("on_touch_down", self.touch_grab)
+        #root.fbind(pos=)
+    def touch_grab(self, widget, touch):
+        touch.grab(self)
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            touch.ungrab(self)
+            self.close_on_pos(touch.pos)
 
     def closebubble(self):
         if self.bubble:
             #self.get_root_window().remove_widget(self.bubble)
             root = App.get_running_app().root
+            root.unbind_uid("on_touch_down", self.callbackid)
             root.clear_widgets([self.bubble])
             self.bubble = None
+    def on_parent(self, instance, value):
+        self.closebubble()
+
     def call(self, button, funccall, data):
         def _call(instance):
             self.closebubble()
@@ -87,6 +100,13 @@ class UseBubble(object):
             else:
                 return funccall()
         button.bind(on_press=_call)
+
+    def close_on_pos(self, pos):
+        bubble = self.bubble
+        if bubble:
+            if not bubble.collide_point(*pos) and not self.collide_point(*pos):
+                self.closebubble()
+            print("success")
 
 
 class DeleteDialog(FloatLayout):
@@ -111,6 +131,15 @@ class DeleteDialog(FloatLayout):
             return
         self.ids["deletemsg"].text = instance
 
+def createListButton(text, func, viewlist):
+    def newfunc(instance):
+        if viewlist.selected_node:
+            func(viewlist.selected_node.message)
+        else:
+            func(None)
+    but = Button(text=text)
+    but.bind(on_press=newfunc)
+    return but
 
 class ListDialog(FloatLayout):
     buttons = ListProperty()
@@ -122,19 +151,19 @@ class ListDialog(FloatLayout):
         self.on_buttons(self.buttons, None)
 
     def on_buttons(self, instance, value):
-        if "viewlist" not in self.ids:
+        if "buttonlist" not in self.ids:
             return
-        viewlist = self.ids["viewlist"]
+        self.ids["buttonlist"].clear_widgets()
         for elem in self.buttons:
             name, func = elem
-            b = Button(text=name)
-            b.bind(on_press=lambda butinstance: func(viewlist.selected_node.message))
-            self.ids["buttonlist"].add_widget(b)
+            but = createListButton(name, func, self.ids["viewlist"])
+            self.ids["buttonlist"].add_widget(but)
 
     def on_entries(self, instance, value):
         if "viewlist" not in self.ids:
             return
         viewlist = self.ids["viewlist"]
+        viewlist.clear_widgets()
         for elem in self.entries:
             lab = TreeViewLabel(text=elem[0])
             lab.color = elem[1]
@@ -154,12 +183,11 @@ class FileEntry(Button):
             self.text = "Download File: {}".format(indict.get("name", ""))
             self.bind(on_press=self.download)
 
-
     def download(self, instance):
         root = App.get_running_app().root
         buttons = [("Download", self.download_afterask), ("Cancel", lambda x, y: root.dismiss_popup)]
         dia = FileDialog(buttons=buttons, dirselect=True)
-        root.popup = Popup(title="Download", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Download", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
 
 
@@ -167,6 +195,9 @@ class FileEntry(Button):
         pass
 
     def remove(self, instance):
+        pass
+
+    def remove_afterask(self, instance):
         pass
 
 class ChatNode(FloatLayout):
@@ -216,23 +247,26 @@ class FriendTreeNode(UseBubble, Button):
         newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (0, 0, 0, 1)), ret[2]["items"])
         dia = ListDialog(entries=newlist, buttons=buttons)
 
-        root.popup = Popup(title="Hashes", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Hashes", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
 
 
     def load_hash(self, selected):
-        ids = App.get_running_app().root.ids
-        ids["convershash"].text = "{}/{}".format(self.text, selected)
-        ids["screenman"].current = "chats"
-        ids["chatbutton"].state = "down"
-        ids["serverbutton"].state = "normal"
+        if not selected:
+            return
+        root = App.get_running_app().root
+        root.dismiss_popup()
+        root.ids["convershash"].text = "{}/{}".format(self.text, selected)
+        root.ids["screenman"].current = "chats"
+        root.ids["chatbutton"].state = "down"
+        root.ids["serverbutton"].state = "normal"
 
     def delete_friend(self):
         root = App.get_running_app().root
         buttonlist = [("Delete", self.delete_friend_aftercheck), ("Cancel", root.dismiss_popup)]
         msg = 'Really delete friend: "{}"?'.format(self.text)
         dia = DeleteDialog(message=msg, buttons=buttonlist)
-        root.popup = Popup(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
 
     def delete_friend_aftercheck(self):
@@ -298,19 +332,73 @@ class ServerTreeNode(UseBubble, Button):
 
 
 
-class ChatAvailTreeNode(GridLayout):
-    certhash = None
-    def __init__(self, certhash, *args, **kwargs):
+class ChatAvailTreeNode(UseBubble, ToggleButton):
+    entry = None
+    _oldstate = "normal"
+    def __init__(self, certhash,localname=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.certhash = certhash
-        # name
-        b = Button(text=self.certhash)
-        b.bind(on_press=self.load_conversation)
-        self.add_widget(b)
+        if localname:
+            self.entry = (localname, None)
+            self.text = localname
+        else:
+            self.entry = (localname, certhash)
+            self.text = certhash
 
-    def load_conversation(self, instance):
+    def on_press(self):
+        if self._oldstate == "normal":
+            self._oldstate = self.state
+            if self.entry[0]:
+                self.open_dia()
+            return super().on_press()
+        self._oldstate = self.state
+        if not self.entry[0]:
+            if not self.bubble:
+                l = [("Clear", lambda x: self.clear_chats(self.entry[1])), \
+                      ("Clear private", lambda x: self.clear_chats_private(self.entry[1]))]
+                self.openbubble(l)
+            else:
+                self.closebubble()
+        else:
+            self.open_dia()
+        return super().on_press()
+
+
+    #def on_state(self, instance, value):
+    #    if not self.entry[0]:
+    #        return self.load_direct()
+    #    self.open_dia()
+
+    def open_dia(self):
         root = App.get_running_app().root
-        root.ids["convershash"].text = self.certhash
+        ret = root.requester.requester.do_request("/client/listhashes", {"name": self.entry[0]}, {})
+        if not logcheck(ret):
+            return
+        hashes = map(lambda x: (x[0], (0, 0, 0, 1)), ret[2].get("items"))
+        buttons = [("Select", self.load_selected), ("Clear", self.clear_chats), ("Close", lambda sel: root.dismiss_popup())]
+        dia = ListDialog(entries=hashes, buttons=buttons)
+        root.popup = PopupNew(title="Select hash", content=dia, size_hint=(0.9, 0.5))
+        root.popup.open()
+
+    def clear_chats(self, selected):
+        if not selected:
+            return
+        pass
+
+    def clear_chats_private(self, selected):
+        if not selected:
+            return
+        pass
+
+    def load_selected(self, selected):
+        if not selected:
+            return
+        root = App.get_running_app().root
+        root.dismiss_popup()
+        root.ids["convershash"].text = selected
+
+    def load_direct(self):
+        root = App.get_running_app().root
+        root.ids["convershash"].text = self.entry[1]
 
 
 class FileDialog(FloatLayout):
@@ -343,6 +431,7 @@ class FileDialog(FloatLayout):
     def on_buttons(self, instance, value):
         if "selectedfile" not in self.ids:
             return
+        self.ids["buttonlist"].clear_widgets()
         for elem in self.buttons:
             name, func = elem
             b = Button(text=name)
@@ -365,9 +454,15 @@ class PwDialog(FloatLayout):
     msg = None
     def __init__(self, *args, **kwargs):
         self.msg = None
-        super().__init__( *args, **kwargs)
+        super().__init__(*args, **kwargs)
         #self.ids["msg"] = msg
 
+
+class PopupNew(Popup):
+    def on_dismiss(self):
+        App.get_running_app().root.popup = None
+        return False
+        #self.dismiss()
 class MainWidget(FloatLayout):
     requester = None
     pathchats = None
@@ -390,7 +485,7 @@ class MainWidget(FloatLayout):
         chathist.add_widget(ChatNode(indict))
 
     def pwhandler(self, msg):
-        self.popup = Popup(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
+        self.popup = PopupNew(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
         self.popup.open()
 
     def dismiss_popup(self):
@@ -440,7 +535,7 @@ class MainWidget(FloatLayout):
 
     def send_image(self):
         buttons = [("Send", self._send_image), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = Popup(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"), size_hint=(0.9, 0.9))
+        self.popup = PopupNew(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"), size_hint=(0.9, 0.9))
         self.popup.open()
 
     def _send_image(self, selectedfiles, caption):
@@ -457,7 +552,7 @@ class MainWidget(FloatLayout):
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = Popup(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
+        self.popup = PopupNew(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
         self.popup.open()
 
     def _send_file(self, selectedfiles, name):
@@ -519,9 +614,19 @@ class MainWidget(FloatLayout):
         os.makedirs(self.pathchats, mode=0o700, exist_ok=True)
         wid = self.ids.get("chatfriends")
         wid.clear_widgets()
+        l = set()
+        group = "ChatAvail"
         for centry in os.listdir(self.pathchats):
             if check_hash(centry):
-                wid.add_widget(ChatAvailTreeNode(centry))
+                ret = self.requester.requester.do_request("/client/getlocal", {"hash": centry}, {})
+                if ret[0]:
+                    name = ret[2].get("name")
+                    if name in l:
+                        continue
+                    l.add(name)
+                else:
+                    name = None
+                wid.add_widget(ChatAvailTreeNode(centry, localname=name, group=group))
 
     def load_conversation(self):
         _hash = self.cur_hash
