@@ -254,6 +254,9 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         if not fileid.isdecimal():
             self.send_error(400, "invalid fileid")
             return
+        retlen = self.headers.get("Content-Length", "")
+        if retlen.isdecimal():
+            self.rfile.read(int(retlen))
         entry = messagebuffer.get(self.certtupel[1] , {}).get(int(fileid), None)
         if not entry:
             fjspath = os.path.join(self.basedir, self.certtupel[1], fileid)

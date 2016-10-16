@@ -7,6 +7,7 @@ import os
 import io
 import json
 import logging
+from __init__ import messagebuffer
 
 from kivy.app import App
 #from kivy.uix.pagelayout import PageLayout
@@ -106,7 +107,6 @@ class UseBubble(object):
         if bubble:
             if not bubble.collide_point(*pos) and not self.collide_point(*pos):
                 self.closebubble()
-            print("success")
 
 
 class DeleteDialog(FloatLayout):
@@ -174,8 +174,10 @@ class ListDialog(FloatLayout):
             viewlist.add_node(lab)
 
 class FileEntry(Button):
+    indict = None
     def __init__(self,indict, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.indict = indict
         if indict["owner"]:
             self.text = "Remove File: {}".format(indict["filepath"])
             self.bind(on_press=self.remove)
@@ -190,15 +192,40 @@ class FileEntry(Button):
         root.popup = PopupNew(title="Download", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
 
-
     def download_afterask(self, selection, name):
-        pass
+        if not selection or not os.path.exist(selection):
+            return
+        if os.path.isdir(selection):
+            newpath = os.path.join(selection, name)
+        else:
+            newpath = os.path.join(os.path.basedir(selection), name)
+        root = App.get_running_app().root
+        resp = root.do_requestdo("/send_file/{}".format(self.indict.get("fileid")), {}, {})
+        if not resp:
+            return
+        retlen = resp.headers.get("Content-Length", "")
+        if retlen.isdecimal():
+            with open(newpath, "wb") as wob:
+                wob.write(resp.read(int(retlen)))
 
     def remove(self, instance):
-        pass
+        root = App.get_running_app().root
+        buttonlist = [("Delete", self.remove_afterask), ("Cancel", root.dismiss_popup)]
+        msg = 'Really delete download offer for file: "{}"?'.format(self.indict.get("name"))
+        dia = DeleteDialog(message=msg, buttons=buttonlist)
+        root.popup = PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
+        root.popup.open()
 
     def remove_afterask(self, instance):
-        pass
+        certhash = self.indict.get("certhash")
+        fileid = self.indict.get("fileid")
+        messagebuffer.get("certhash", {}).pop(fileid)
+        fjspath = os.path.join(self.basedir, certhash, fileid)
+        if os.path.exists(fjspath):
+            try:
+                os.remove(fjspath)
+            except:
+                pass
 
 class ChatNode(FloatLayout):
     def __init__(self, indict, *args, **kwargs):
@@ -263,13 +290,13 @@ class FriendTreeNode(UseBubble, Button):
 
     def delete_friend(self):
         root = App.get_running_app().root
-        buttonlist = [("Delete", self.delete_friend_aftercheck), ("Cancel", root.dismiss_popup)]
+        buttonlist = [("Delete", self.delete_friend_afterask), ("Cancel", root.dismiss_popup)]
         msg = 'Really delete friend: "{}"?'.format(self.text)
         dia = DeleteDialog(message=msg, buttons=buttonlist)
         root.popup = PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
         root.popup.open()
 
-    def delete_friend_aftercheck(self):
+    def delete_friend_afterask(self):
         root = App.get_running_app().root
         root.dismiss_popup()
         ret = root.requester.requester.do_request("/client/delentity", {"name":self.text})
@@ -382,11 +409,13 @@ class ChatAvailTreeNode(UseBubble, ToggleButton):
     def clear_chats(self, selected):
         if not selected:
             return
+        #TODO
         pass
 
     def clear_chats_private(self, selected):
         if not selected:
             return
+        #TODO
         pass
 
     def load_selected(self, selected):
