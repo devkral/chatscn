@@ -1,6 +1,9 @@
 
 import logging
 import os
+import threading
+
+from simplescn.tools import logcheck
 
 from kivy.uix.popup import Popup
 from kivy.properties import ListProperty, StringProperty, BooleanProperty
@@ -27,13 +30,14 @@ class UseBubble(object):
         #self.get_root_window().add_widget(self.bubble, root.canvas)
         root.add_widget(self.bubble)
         self.callbackid = root.fbind("on_touch_down", self.touch_grab)
-        #root.fbind(pos=)
     def touch_grab(self, widget, touch):
         touch.grab(self)
     def on_touch_up(self, touch):
         if touch.grab_current is self:
             touch.ungrab(self)
             self.close_on_pos(touch.pos)
+        return True
+
 
     def closebubble(self):
         if self.bubble:
@@ -58,6 +62,7 @@ class UseBubble(object):
         bubble = self.bubble
         if bubble:
             if not bubble.collide_point(*pos) and not self.collide_point(*pos):
+                print("collide", bubble.pos, pos)
                 self.closebubble()
 
 
@@ -70,6 +75,9 @@ class PwDialog(FloatLayout):
 
 
 class PopupNew(Popup):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.size_hint = (0.9, 0.9)
     def on_dismiss(self):
         App.get_running_app().root.popup = None
         return False
@@ -185,3 +193,73 @@ class FileDialog(FloatLayout):
             return
         nameinput = self.ids["nameinput"]
         nameinput.text = os.path.basename(selection[0])
+
+class NameDialogAdd(FloatLayout):
+    nameproposal = StringProperty()
+    event = None
+    selected = None
+    def __init__(self, *args, **kwargs):
+        super.__init__(*args, **kwargs)
+        self.event = threading.Event()
+        self.event.clear()
+
+    def ok(self):
+        self.selected = self.ids["nameproposal"].text
+        self.dismiss()
+        self.event.set()
+    def cancel(self):
+        self.selected = None
+        self.dismiss()
+        self.event.set()
+
+    def wait_selected(self):
+        self.event.wait()
+        return self.selected
+
+class NameDialog(ListDialog):
+    event = None
+    selected = None
+    nameproposal = StringProperty()
+    def __init__(self, *args, **kwargs):
+        super.__init__(*args, **kwargs)
+        self.event = threading.Event()
+        self.event.clear()
+        self.buttons = [("Select", self.return_selected), ("Add new", self.add_entity), ("Close", lambda x: self.return_selected(None))]
+
+    @staticmethod
+    def load_entities():
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/listnodenames", {}, {})
+        if not logcheck(ret):
+            return None
+        return map(lambda entry: (entry, (1, 0, 0, 1)), ret[2].get("items"))
+    @classmethod
+    def create(cls, *args, **kwargs):
+        ret = cls.load_entities()
+        if not ret:
+            return None
+        return cls(*args, entries=ret, **kwargs)
+
+
+    def add_entity(self, ignored):
+        dia = NameDialogAdd(nameproposal=self.nameproposal)
+        popup = PopupNew(title="Add", content=dia)
+        popup.open()
+        name = popup.wait_selected()
+        if not name:
+            return
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/addentity", {"name": name}, {})
+        if not logcheck(ret):
+            return
+        self.entries = self.load_entities()
+
+    def return_selected(self, name):
+        self.selected = name
+        root = App.get_running_app().root
+        self.event.set()
+        root.dismiss_popup()
+
+    def wait_selected(self):
+        self.event.wait()
+        return self.selected

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-5.1.dtd">
 <!-- eric project file for project chatscn -->
-<!-- Saved: 2016-08-03, 21:40:28 -->
+<!-- Saved: 2016-10-17, 16:39:42 -->
 <!-- Copyright (C) 2016 alex,  -->
 <Project version="5.1">
   <Language>en_US</Language>
@@ -18,6 +18,8 @@
     <Source>chatscn/__main__.py</Source>
     <Source>chatscn/chatkivy/__init__.py</Source>
     <Source>chatscn/chatkivy/chatscn.kv</Source>
+    <Source>chatscn/chatkivy/dialogs.py</Source>
+    <Source>chatscn/chatkivy/nodes.py</Source>
   </Sources>
   <Forms/>
   <Translations/>

@@ -25,8 +25,8 @@ from simplescn.tools.checks import check_hash
 from simplescn.config import isself
 
 import chatscn
-from chatscn.chatkivy.nodes import ChatNode, PwDialog, FileDialog, ServerTreeNode, FriendTreeNode, ChatAvailTreeNode
-from chatscn.chatkivy.dialogs import PopupNew
+from chatscn.chatkivy.nodes import ChatNode, ServerTreeNode, FriendTreeNode, ChatAvailTreeNode
+from chatscn.chatkivy.dialogs import PopupNew, PwDialog, FileDialog
 
 def genHandler(rootwidget, chatdirectory):
     class KivyHandler(chatscn.ChatHandler):
@@ -128,7 +128,7 @@ class MainWidget(FloatLayout):
 
     def send_image(self):
         buttons = [("Send", self._send_image), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = PopupNew(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"), size_hint=(0.9, 0.9))
+        self.popup = PopupNew(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"))
         self.popup.open()
 
     def _send_image(self, selectedfiles, caption):
@@ -145,7 +145,7 @@ class MainWidget(FloatLayout):
 
     def send_file(self):
         buttons = [("Send", self._send_file), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = PopupNew(title="Load File", content=FileDialog(buttons=buttons), size_hint=(0.9, 0.9))
+        self.popup = PopupNew(title="Load File", content=FileDialog(buttons=buttons))
         self.popup.open()
 
     def _send_file(self, selectedfiles, name):

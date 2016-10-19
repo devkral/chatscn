@@ -12,7 +12,7 @@ from kivy.uix.floatlayout import FloatLayout
 
 from simplescn.tools import logcheck
 
-from chatkivy.dialogs import FileDialog, PopupNew, UseBubble, DeleteDialog, ListDialog
+from chatkivy.dialogs import FileDialog, PopupNew, UseBubble, DeleteDialog, ListDialog, NameDialog
 from chatscn import messagebuffer
 
 
@@ -32,7 +32,7 @@ class FileEntry(Button):
         root = App.get_running_app().root
         buttons = [("Download", self.download_afterask), ("Cancel", lambda x, y: root.dismiss_popup)]
         dia = FileDialog(buttons=buttons, dirselect=True)
-        root.popup = PopupNew(title="Download", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Download", content=dia)
         root.popup.open()
 
     def download_afterask(self, selection, name):
@@ -105,7 +105,17 @@ class FriendTreeNode(UseBubble, Button):
         if self.bubble:
             self.closebubble()
         else:
-            self.openbubble([("Load", self.load_friend), ("Rename", lambda:print("TODO")), ("Delete", self.delete_friend)])
+            self.openbubble([("Load", self.load_friend), ("Rename", self.rename), ("Delete", self.delete_friend)])
+
+    def rename(self):
+        dia = NameDialog()
+        name = dia.wait_selected()
+        if not name:
+            return
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/renameentity", {"name": self.text, "newname": name}, {})
+        if not logcheck(ret):
+            return
 
     def load_friend(self):
         self.closebubble()
@@ -117,7 +127,7 @@ class FriendTreeNode(UseBubble, Button):
         newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (0, 0, 0, 1)), ret[2]["items"])
         dia = ListDialog(entries=newlist, buttons=buttons)
 
-        root.popup = PopupNew(title="Hashes", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Hashes", content=dia)
         root.popup.open()
 
 
@@ -170,8 +180,9 @@ class ServerTreeNode(UseBubble, Button):
             self.openbubble(l)
 
     def add_friend(self):
-        #TODO
-        self.add_friend_after(self.entry[0])
+        name = NameDialog(nameproposal=self.entry[0])
+        if name:
+            self.add_friend_after(name)
 
     def add_friend_after(self, name):
         root = App.get_running_app().root
@@ -246,7 +257,7 @@ class ChatAvailTreeNode(UseBubble, ToggleButton):
         hashes = map(lambda x: (x[0], (0, 0, 0, 1)), ret[2].get("items"))
         buttons = [("Select", self.load_selected), ("Clear", self.clear_chats), ("Close", lambda sel: root.dismiss_popup())]
         dia = ListDialog(entries=hashes, buttons=buttons)
-        root.popup = PopupNew(title="Select hash", content=dia, size_hint=(0.9, 0.5))
+        root.popup = PopupNew(title="Select hash", content=dia)
         root.popup.open()
 
     def clear_chats(self, selected):
