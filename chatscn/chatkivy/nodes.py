@@ -2,18 +2,20 @@
 
 import io
 import os
+import shutil
 
 from kivy.app import App
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
+from kivy.core.image import Image as CoreImage
 from kivy.uix.floatlayout import FloatLayout
 
 from simplescn.tools import logcheck
 
 from chatkivy.dialogs import FileDialog, PopupNew, UseBubble, DeleteDialog, ListDialog, NameDialog
-from chatscn import messagebuffer
+from chatscn import messagebuffer, simplelock
 
 
 class FileEntry(Button):
@@ -29,11 +31,9 @@ class FileEntry(Button):
             self.bind(on_press=self.download)
 
     def download(self, instance):
-        root = App.get_running_app().root
-        buttons = [("Download", self.download_afterask), ("Cancel", lambda x, y: root.dismiss_popup)]
+        buttons = [("Download", self.download_afterask), ("Cancel", lambda x, y: None)]
         dia = FileDialog(buttons=buttons, dirselect=True)
-        root.popup = PopupNew(title="Download", content=dia)
-        root.popup.open()
+        PopupNew(title="Download", content=dia).open()
 
     def download_afterask(self, selection, name):
         if not selection or not os.path.exist(selection):
@@ -52,18 +52,17 @@ class FileEntry(Button):
                 wob.write(resp.read(int(retlen)))
 
     def remove(self, instance):
-        root = App.get_running_app().root
-        buttonlist = [("Delete", self.remove_afterask), ("Cancel", root.dismiss_popup)]
+        buttonlist = [("Delete", self.remove_afterask), ("Cancel", lambda: None)]
         msg = 'Really delete download offer for file: "{}"?'.format(self.indict.get("name"))
         dia = DeleteDialog(message=msg, buttons=buttonlist)
-        root.popup = PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
-        root.popup.open()
+        PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5)).open()
 
     def remove_afterask(self, instance):
+        root = App.get_running_app().root
         certhash = self.indict.get("certhash")
         fileid = self.indict.get("fileid")
         messagebuffer.get("certhash", {}).pop(fileid)
-        fjspath = os.path.join(self.basedir, certhash, fileid)
+        fjspath = os.path.join(root.pathchats, certhash, fileid)
         if os.path.exists(fjspath):
             try:
                 os.remove(fjspath)
@@ -85,11 +84,12 @@ class ChatNode(FloatLayout):
             l = Label(text=indict["text"], size_hint=size, pos_hint=pos, halign='left')
             self.add_widget(l)
             l.texture_update()
-            #print(l.size, l.texture_size, self.size, self.pos, l.pos)
         elif indict["type"] == "image":
             #self.height = 100
             l = io.BytesIO(bytes(indict["image"], "utf-8"))
-            self.add_widget(Image(source=l, size_hint=size, pos_hint=pos))
+            img = Image()
+            img.texture = CoreImage(source=l, size_hint=size, pos_hint=pos)
+            self.add_widget(img)
         elif indict["type"] == "file":
             self.add_widget(FileEntry(indict, size_hint=size, pos_hint=pos))
         else:
@@ -108,14 +108,18 @@ class FriendTreeNode(UseBubble, Button):
             self.openbubble([("Load", self.load_friend), ("Rename", self.rename), ("Delete", self.delete_friend)])
 
     def rename(self):
-        dia = NameDialog()
-        name = dia.wait_selected()
-        if not name:
+        self.closebubble()
+        dia = NameDialog.create(self.rename_call)
+        if not dia:
             return
+        PopupNew(title="Rename", content=dia).open()
+
+    def rename_call(self, name):
         root = App.get_running_app().root
-        ret = root.requester.requester.do_request("/client/renameentity", {"name": self.text, "newname": name}, {})
+        ret = root.requester.requester.do_request("/client/renameentity", {"name": self.text, "newname": name, "merge":True}, {})
         if not logcheck(ret):
             return
+        root.load_friends()
 
     def load_friend(self):
         self.closebubble()
@@ -123,35 +127,30 @@ class FriendTreeNode(UseBubble, Button):
         ret = root.requester.requester.do_request("/client/listhashes", {"name": self.text, "filter": "client"}, {})
         if not logcheck(ret):
             return
-        buttons = [("Load", self.load_hash), ("Close", lambda x: root.dismiss_popup())]
-        newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (0, 0, 0, 1)), ret[2]["items"])
+        buttons = [("Load", self.load_hash), ("Close", lambda x: None)]
+        newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (1, 1, 1, 1)), ret[2]["items"])
         dia = ListDialog(entries=newlist, buttons=buttons)
 
-        root.popup = PopupNew(title="Hashes", content=dia)
-        root.popup.open()
+        PopupNew(title="Hashes", content=dia).open()
 
 
     def load_hash(self, selected):
         if not selected:
             return
         root = App.get_running_app().root
-        root.dismiss_popup()
         root.ids["convershash"].text = "{}/{}".format(self.text, selected)
         root.ids["screenman"].current = "chats"
         root.ids["chatbutton"].state = "down"
         root.ids["serverbutton"].state = "normal"
 
     def delete_friend(self):
-        root = App.get_running_app().root
-        buttonlist = [("Delete", self.delete_friend_afterask), ("Cancel", root.dismiss_popup)]
+        buttonlist = [("Delete", self.delete_friend_afterask), ("Cancel", lambda: None)]
         msg = 'Really delete friend: "{}"?'.format(self.text)
         dia = DeleteDialog(message=msg, buttons=buttonlist)
-        root.popup = PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5))
-        root.popup.open()
+        PopupNew(title="Confirm Deletion", content=dia, size_hint=(0.9, 0.5)).open()
 
     def delete_friend_afterask(self):
         root = App.get_running_app().root
-        root.dismiss_popup()
         ret = root.requester.requester.do_request("/client/delentity", {"name":self.text})
         if logcheck(ret):
             root.load_friends()
@@ -172,25 +171,23 @@ class ServerTreeNode(UseBubble, Button):
         if self.bubble:
             self.closebubble()
         else:
-            l = [("Load", self.load_server), ("Info", lambda: print("TODO"))]
+            l = []
             if not self.entry[3]:
+                l.append(("Load", self.load_server_direct))
                 l.append(("Add…", self.add_friend))
             else:
+                l.append(("Load", self.load_server))
                 l.append(("Update", self.update_friend))
             self.openbubble(l)
 
     def add_friend(self):
-        name = NameDialog(nameproposal=self.entry[0])
-        if name:
-            self.add_friend_after(name)
+        dia = NameDialog.create(self.add_friend_after, nameproposal=self.entry[0])
+        if not dia:
+            return
+        PopupNew(title="Rename", content=dia).open()
 
     def add_friend_after(self, name):
         root = App.get_running_app().root
-        ret = root.requester.requester.do_request("/client/exist", {"name": name}, {})
-        if not ret[1]:
-            ret = root.requester.requester.do_request("/client/addentity", {"name": name}, {})
-            if not logcheck(ret):
-                return
         self.entry[3] = name
         d = {"name": name, "hash": self.entry[1], "type": "client"}
         root.requester.requester.do_request("/client/addhash", d, {})
@@ -199,19 +196,34 @@ class ServerTreeNode(UseBubble, Button):
     def update_friend(self):
         root = App.get_running_app().root
         text = root.requester.cur_server
-        d2 = {"hash": self.entry[1], "referencetype": "surl", "reference": text}
-        root.requester.requester.do_request("/client/addreference", d2, {})
-        d3 = {"hash": self.entry[1], "referencetype": "sname", "reference": self.entry[0]}
-        root.requester.requester.do_request("/client/addreference", d3, {})
+        d2 = {"hash": self.entry[1], "reftype": "surl", "reference": text}
+        ret = root.requester.requester.do_request("/client/addreference", d2, {})
+        logcheck(ret)
+        d3 = {"hash": self.entry[1], "reftype": "sname", "reference": self.entry[0]}
+        ret = root.requester.requester.do_request("/client/addreference", d3, {})
+        logcheck(ret)
 
     def load_server(self):
-        ids = App.get_running_app().root.ids
-        ids["convershash"].text = "{}/{}".format(self.entry[0], self.entry[1])
-        ids["screenman"].current = "chats"
-        ids["chatbutton"].state = "down"
-        ids["serverbutton"].state = "normal"
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/listhashes", {"name": self.text, "filter": "client"}, {})
+        if not logcheck(ret):
+            return
+        if len(ret[2]["items"]) <= 1:
+            self.load_server_direct()
+            return
+        newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (0, 0, 0, 1)), ret[2]["items"])
+        buttons = [("Load", self.load_server_direct)]
+        dia = ListDialog(entries=newlist, buttons=buttons)
+        PopupNew(title="Hashes", content=dia).open()
 
-
+    def load_server_direct(self, _hash=None):
+        if not _hash:
+            _hash = self.entry[1]
+        root = App.get_running_app().root
+        root.ids["convershash"].text = "{}/{}".format(self.entry[0], _hash)
+        root.ids["screenman"].current = "chats"
+        root.ids["chatbutton"].state = "down"
+        root.ids["serverbutton"].state = "normal"
 
 class ChatAvailTreeNode(UseBubble, ToggleButton):
     entry = None
@@ -226,6 +238,10 @@ class ChatAvailTreeNode(UseBubble, ToggleButton):
             self.text = certhash
 
     def on_press(self):
+        if not self.entry[0]:
+            root = App.get_running_app().root
+            root.set_namehash(self.entry[1])
+            root.ids["convershash"].text = self.entry[1]
         if self._oldstate == "normal":
             self._oldstate = self.state
             if self.entry[0]:
@@ -234,8 +250,8 @@ class ChatAvailTreeNode(UseBubble, ToggleButton):
         self._oldstate = self.state
         if not self.entry[0]:
             if not self.bubble:
-                l = [("Clear", lambda x: self.clear_chats(self.entry[1])), \
-                      ("Clear private", lambda x: self.clear_chats_private(self.entry[1]))]
+                l = [("Clear", lambda: self.clear_chats(self.entry[1])), \
+                      ("Clear private", lambda: self.clear_chats_private(self.entry[1]))]
                 self.openbubble(l)
             else:
                 self.closebubble()
@@ -243,42 +259,43 @@ class ChatAvailTreeNode(UseBubble, ToggleButton):
             self.open_dia()
         return super().on_press()
 
-
-    #def on_state(self, instance, value):
-    #    if not self.entry[0]:
-    #        return self.load_direct()
-    #    self.open_dia()
-
     def open_dia(self):
         root = App.get_running_app().root
         ret = root.requester.requester.do_request("/client/listhashes", {"name": self.entry[0]}, {})
         if not logcheck(ret):
             return
         hashes = map(lambda x: (x[0], (0, 0, 0, 1)), ret[2].get("items"))
-        buttons = [("Select", self.load_selected), ("Clear", self.clear_chats), ("Close", lambda sel: root.dismiss_popup())]
+        buttons = [("Select", self.load_selected), ("Clear", self.clear_chats), ("Close", lambda sel: None)]
         dia = ListDialog(entries=hashes, buttons=buttons)
-        root.popup = PopupNew(title="Select hash", content=dia)
-        root.popup.open()
+        PopupNew(title="Select hash", content=dia).open()
 
     def clear_chats(self, selected):
         if not selected:
             return
-        #TODO
-        pass
+        root = App.get_running_app().root
+        with simplelock:
+            shutil.rmtree(os.path.join(root.pathchats, selected), ignore_errors=True)
+            if selected in messagebuffer:
+                del messagebuffer[selected]
+        root.load_conversation()
 
     def clear_chats_private(self, selected):
         if not selected:
             return
-        #TODO
-        pass
+        with simplelock:
+            if selected in messagebuffer:
+                del messagebuffer[selected]
+        root = App.get_running_app().root
+        root.load_conversation()
 
     def load_selected(self, selected):
         if not selected:
             return
         root = App.get_running_app().root
-        root.dismiss_popup()
+        root.set_namehash(selected)
         root.ids["convershash"].text = selected
 
     def load_direct(self):
         root = App.get_running_app().root
+        root.set_namehash(self.entry[1])
         root.ids["convershash"].text = self.entry[1]

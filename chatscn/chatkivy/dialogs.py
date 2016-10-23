@@ -1,7 +1,6 @@
 
 import logging
 import os
-import threading
 
 from simplescn.tools import logcheck
 
@@ -62,29 +61,35 @@ class UseBubble(object):
         bubble = self.bubble
         if bubble:
             if not bubble.collide_point(*pos) and not self.collide_point(*pos):
-                print("collide", bubble.pos, pos)
                 self.closebubble()
 
 
 class PwDialog(FloatLayout):
-    msg = None
-    def __init__(self, *args, **kwargs):
+    def pw(self):
+        return self.ids["pwfield"].text
+    def __init__(self, msg, *args, **kwargs):
         self.msg = None
         super().__init__(*args, **kwargs)
+        self.ids["pwfield"].text = msg
         #self.ids["msg"] = msg
 
 
 class PopupNew(Popup):
     def __init__(self, *args, **kwargs):
+        if "content" in kwargs:
+            kwargs["content"].parent_popup = self
         super().__init__(*args, **kwargs)
         self.size_hint = (0.9, 0.9)
-    def on_dismiss(self):
-        App.get_running_app().root.popup = None
-        return False
+        self.on_content(self.content, None)
+
+    def on_content(self, instance, value):
+        if self.content:
+            self.content.parent_popup = self
 
 class DeleteDialog(FloatLayout):
     buttons = ListProperty()
     message = StringProperty()
+    parent_popup = None
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.on_buttons(self.buttons, None)
@@ -96,7 +101,7 @@ class DeleteDialog(FloatLayout):
         for elem in self.buttons:
             name, func = elem
             b = Button(text=name)
-            b.bind(on_press=func())
+            b.bind(on_press=lambda x:self.call(func))
             self.ids["buttonlist"].add_widget(b)
 
     def on_message(self, instance, value):
@@ -104,19 +109,14 @@ class DeleteDialog(FloatLayout):
             return
         self.ids["deletemsg"].text = instance
 
-def createListButton(text, func, viewlist):
-    def newfunc(instance):
-        if viewlist.selected_node:
-            func(viewlist.selected_node.message)
-        else:
-            func(None)
-    but = Button(text=text)
-    but.bind(on_press=newfunc)
-    return but
+    def call(self, func):
+        self.popup_parent.dismiss()
+        func()
 
 class ListDialog(FloatLayout):
     buttons = ListProperty()
     entries = ListProperty()
+    parent_popup = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -129,7 +129,8 @@ class ListDialog(FloatLayout):
         self.ids["buttonlist"].clear_widgets()
         for elem in self.buttons:
             name, func = elem
-            but = createListButton(name, func, self.ids["viewlist"])
+            but = Button(text=name)
+            but.bind(on_press=lambda butinstance: self.call(func))
             self.ids["buttonlist"].add_widget(but)
 
     def on_entries(self, instance, value):
@@ -145,6 +146,14 @@ class ListDialog(FloatLayout):
             else:
                 lab.message = elem[0]
             viewlist.add_node(lab)
+
+    def call(self, func):
+        if self.ids["viewlist"].selected_node:
+            arg = self.ids["viewlist"].selected_node.message
+        else:
+            arg = None
+        if not func(arg):
+            self.parent_popup.dismiss()
 
 
 class FileDialog(FloatLayout):
@@ -181,7 +190,7 @@ class FileDialog(FloatLayout):
         for elem in self.buttons:
             name, func = elem
             b = Button(text=name)
-            b.bind(on_press=lambda butinstance: func(self.ids["selectedfile"].selection, self.ids["nameinput"]))
+            b.bind(on_press=lambda butinstance: self.call(func))
             self.ids["buttonlist"].add_widget(b)
 
     def select(self, selection):
@@ -194,36 +203,33 @@ class FileDialog(FloatLayout):
         nameinput = self.ids["nameinput"]
         nameinput.text = os.path.basename(selection[0])
 
+    def call(self, func):
+        if not func(self.ids["selectedfile"].selection, self.ids["nameinput"].text):
+            self.parent_popup.dismiss()
+
 class NameDialogAdd(FloatLayout):
-    nameproposal = StringProperty()
-    event = None
-    selected = None
-    def __init__(self, *args, **kwargs):
-        super.__init__(*args, **kwargs)
-        self.event = threading.Event()
-        self.event.clear()
+    nameproposal = StringProperty("")
+    func = None
+    parent_popup = None
+    def __init__(self, func, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.func = func
+        self.ids["newname"].text = self.nameproposal
 
     def ok(self):
-        self.selected = self.ids["nameproposal"].text
-        self.dismiss()
-        self.event.set()
-    def cancel(self):
-        self.selected = None
-        self.dismiss()
-        self.event.set()
+        self.parent_popup.dismiss()
+        self.func(self.ids["newname"].text)
 
-    def wait_selected(self):
-        self.event.wait()
-        return self.selected
+    def cancel(self):
+        self.parent_popup.dismiss()
 
 class NameDialog(ListDialog):
-    event = None
-    selected = None
-    nameproposal = StringProperty()
-    def __init__(self, *args, **kwargs):
-        super.__init__(*args, **kwargs)
-        self.event = threading.Event()
-        self.event.clear()
+    nameproposal = StringProperty("")
+    func = None
+    parent_popup = None
+    def __init__(self, func, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.func = func
         self.buttons = [("Select", self.return_selected), ("Add new", self.add_entity), ("Close", lambda x: self.return_selected(None))]
 
     @staticmethod
@@ -232,34 +238,27 @@ class NameDialog(ListDialog):
         ret = root.requester.requester.do_request("/client/listnodenames", {}, {})
         if not logcheck(ret):
             return None
-        return map(lambda entry: (entry, (1, 0, 0, 1)), ret[2].get("items"))
+        return map(lambda entry: (entry, (1, 1, 1, 1)), ret[2].get("items"))
+
     @classmethod
-    def create(cls, *args, **kwargs):
+    def create(cls, func, *args, **kwargs):
         ret = cls.load_entities()
         if not ret:
             return None
-        return cls(*args, entries=ret, **kwargs)
+        return cls(func, *args, entries=ret, **kwargs)
 
+    def add_entity(self, ignored=None):
+        dia = NameDialogAdd(self.add_entity_afterask, nameproposal=self.nameproposal)
+        PopupNew(title="Add", content=dia, size_hint=(0.8, 0.4)).open()
+        return True
 
-    def add_entity(self, ignored):
-        dia = NameDialogAdd(nameproposal=self.nameproposal)
-        popup = PopupNew(title="Add", content=dia)
-        popup.open()
-        name = popup.wait_selected()
-        if not name:
-            return
+    def add_entity_afterask(self, name):
         root = App.get_running_app().root
         ret = root.requester.requester.do_request("/client/addentity", {"name": name}, {})
         if not logcheck(ret):
-            return
+            return True
         self.entries = self.load_entities()
+        return True
 
     def return_selected(self, name):
-        self.selected = name
-        root = App.get_running_app().root
-        self.event.set()
-        root.dismiss_popup()
-
-    def wait_selected(self):
-        self.event.wait()
-        return self.selected
+        self.func(name)

@@ -64,8 +64,8 @@ class MainWidget(FloatLayout):
     cur_name = None
     popup = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    #def __init__(self, *args, **kwargs):
+    #    super().__init__(*args, **kwargs)
 
     def notify(self, indict):
         if not indict:
@@ -78,12 +78,10 @@ class MainWidget(FloatLayout):
         chathist.add_widget(ChatNode(indict))
 
     def pwhandler(self, msg):
-        self.popup = PopupNew(title="Password Required", content=PwDialog(msg), size_hint=(0.9, 0.5))
-        self.popup.open()
-
-    def dismiss_popup(self):
-        if self.popup:
-            self.popup.dismiss()
+        dia = PwDialog(msg)
+        popup = PopupNew(title="Password Required", content=dia, size_hint=(0.9, 0.5))
+        popup.open()
+        return dia.pw()
 
     def set_namehash(self, text):
         splitted = text.rsplit("/", 1)
@@ -127,12 +125,11 @@ class MainWidget(FloatLayout):
             self.notify(ret)
 
     def send_image(self):
-        buttons = [("Send", self._send_image), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = PopupNew(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"))
-        self.popup.open()
+        buttons = [("Send", self._send_image), ("Cancel", lambda selection, x: None)]
+        popup = PopupNew(title="Load Image", content=FileDialog(buttons=buttons, label="Caption"))
+        popup.open()
 
     def _send_image(self, selectedfiles, caption):
-        self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
         if self.cur_hash == "":
@@ -144,12 +141,11 @@ class MainWidget(FloatLayout):
             self.notify(ret)
 
     def send_file(self):
-        buttons = [("Send", self._send_file), ("Cancel", lambda selection, x: self.dismiss_popup())]
-        self.popup = PopupNew(title="Load File", content=FileDialog(buttons=buttons))
-        self.popup.open()
+        buttons = [("Send", self._send_file), ("Cancel", lambda selection, x: None)]
+        popup = PopupNew(title="Load File", content=FileDialog(buttons=buttons))
+        popup.open()
 
     def _send_file(self, selectedfiles, name):
-        self.dismiss_popup()
         if not selectedfiles or len(selectedfiles) == 0:
             return
         if self.cur_hash == "":
@@ -272,7 +268,7 @@ class ChatSCNApp(App):
         #ch = self.root.ids["chathist"]
         #ch.bind(minimum_height=ch.setter('height'))
 
-    def async_load(self, func,  *args, **kwargs):
+    def async_load(self, func, *args, **kwargs):
         # needed for kv file
         threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True).start()
 

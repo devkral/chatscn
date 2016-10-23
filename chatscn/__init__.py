@@ -120,7 +120,7 @@ class SCNSender(object):
     def send_image(self, certhash, sensitivel, filepath, caption="", name=None):
         body = {"type": "image", "caption": caption, "sensitivity": sensitivel}
         # TODO: convert/compress images, changeable size
-        if os.path.stat(filepath).st_size > 8*1024*1024:
+        if os.stat(filepath).st_size > 8*1024*1024:
             logging.warning("image very big")
         with open(filepath, "r", errors='backslashreplace') as imgreob:
             body["image"] = imgreob.read()
@@ -213,9 +213,9 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 0
-            self.send_response(200)
             self.end_headers()
             self.notify(writeStuff(self.basedir, self.certtupel[1], ret, False, writedisk=True))
         else:
@@ -228,6 +228,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 1
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
@@ -244,6 +245,7 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
             ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 2
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
