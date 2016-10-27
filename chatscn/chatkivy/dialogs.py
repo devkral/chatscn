@@ -3,9 +3,10 @@ import logging
 import os
 
 from simplescn.tools import logcheck
+from simplescn.tools.checks import check_name
 
 from kivy.uix.popup import Popup
-from kivy.properties import ListProperty, StringProperty, BooleanProperty
+from kivy.properties import ListProperty, StringProperty, BooleanProperty, ObjectProperty
 from kivy.uix.bubble import BubbleButton, Bubble
 from kivy.uix.treeview import TreeViewLabel
 from kivy.uix.floatlayout import FloatLayout
@@ -64,22 +65,15 @@ class UseBubble(object):
                 self.closebubble()
 
 
-class PwDialog(FloatLayout):
-    def pw(self):
-        return self.ids["pwfield"].text
-    def __init__(self, msg, *args, **kwargs):
-        self.msg = None
-        super().__init__(*args, **kwargs)
-        self.ids["pwfield"].text = msg
-        #self.ids["msg"] = msg
+
 
 
 class PopupNew(Popup):
+    size_hint = ListProperty((0.9, 0.9))
     def __init__(self, *args, **kwargs):
         if "content" in kwargs:
             kwargs["content"].parent_popup = self
         super().__init__(*args, **kwargs)
-        self.size_hint = (0.9, 0.9)
         self.on_content(self.content, None)
 
     def on_content(self, instance, value):
@@ -110,8 +104,14 @@ class DeleteDialog(FloatLayout):
         self.ids["deletemsg"].text = instance
 
     def call(self, func):
-        self.popup_parent.dismiss()
+        self.parent_popup.dismiss()
         func()
+
+def createListDiaButton(name, func, funcwrapper):
+    but = Button(text=name)
+    #TODO: explain why lambda is replaced
+    but.bind(on_press=lambda butinstance: funcwrapper(func))
+    return but
 
 class ListDialog(FloatLayout):
     buttons = ListProperty()
@@ -129,9 +129,8 @@ class ListDialog(FloatLayout):
         self.ids["buttonlist"].clear_widgets()
         for elem in self.buttons:
             name, func = elem
-            but = Button(text=name)
-            but.bind(on_press=lambda butinstance: self.call(func))
-            self.ids["buttonlist"].add_widget(but)
+            # needs extra createListDiaButton function, elsewise only last is executed (no clue why)
+            self.ids["buttonlist"].add_widget(createListDiaButton(name, func, self.call))
 
     def on_entries(self, instance, value):
         if "viewlist" not in self.ids:
@@ -145,7 +144,12 @@ class ListDialog(FloatLayout):
                 lab.message = elem[2]
             else:
                 lab.message = elem[0]
+            lab.bind(on_touch_down=self._call2)
             viewlist.add_node(lab)
+
+    def _call2(self, widget, touch):
+        if (touch.is_double_tap and len(self.buttons)>0):
+            self.call(self.buttons[0][1])
 
     def call(self, func):
         if self.ids["viewlist"].selected_node:
@@ -207,18 +211,20 @@ class FileDialog(FloatLayout):
         if not func(self.ids["selectedfile"].selection, self.ids["nameinput"].text):
             self.parent_popup.dismiss()
 
-class NameDialogAdd(FloatLayout):
+class DialogAdd(FloatLayout):
     nameproposal = StringProperty("")
-    func = None
+    func = ObjectProperty(None)
+    check_func = ObjectProperty(None)
     parent_popup = None
-    def __init__(self, func, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.func = func
         self.ids["newname"].text = self.nameproposal
 
     def ok(self):
-        self.parent_popup.dismiss()
-        self.func(self.ids["newname"].text)
+        text = self.ids["newname"].text
+        if self.check_func and self.check_func(text):
+            self.parent_popup.dismiss()
+            self.func(text)
 
     def cancel(self):
         self.parent_popup.dismiss()
@@ -248,7 +254,7 @@ class NameDialog(ListDialog):
         return cls(func, *args, entries=ret, **kwargs)
 
     def add_entity(self, ignored=None):
-        dia = NameDialogAdd(self.add_entity_afterask, nameproposal=self.nameproposal)
+        dia = DialogAdd(func=self.add_entity_afterask, check_func=check_name, nameproposal=self.nameproposal)
         PopupNew(title="Add", content=dia, size_hint=(0.8, 0.4)).open()
         return True
 

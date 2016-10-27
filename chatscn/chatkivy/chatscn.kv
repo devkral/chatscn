@@ -46,7 +46,6 @@
         bar_pos_y: "right"
         bar_width: 10
         ScrollTree:
-            on_selected_node: if len(root.buttons) > 0: root.call(root.buttons[0][1])
             id: viewlist
     BoxLayout:
         orientation: 'horizontal'
@@ -55,9 +54,9 @@
         size_hint: 1, 0.07
         id: buttonlist
 
-<NameDialogAdd>:
+<DialogAdd>:
     Label:
-        text: "Add new entity:"
+        text: "Add new:"
         pos_hint: {"x": 0, 'y': 0.7}
         size_hint: 1, 0.3
     TextInput:
@@ -101,26 +100,6 @@
         pos_hint: {"x": 0, 'y': 0}
         size_hint: 1, 0.07
         id: buttonlist
-
-<PwDialog>:
-    Label:
-        id: msglabel
-        pos_hint: {"x": 0, 'y': 0.5}
-        size_hint: 1, 0.5
-    TextInput:
-        id: pwfield
-        password: True
-        multiline: False
-        pos_hint: {"x": 0, 'y': 0.3}
-        size_hint: 1, 0.2
-    Button:
-        text: "Ok"
-        pos_hint: {"x": 0, 'y': 0.0}
-        size_hint: 0.5, 0.2
-    Button:
-        text: "Cancel"
-        pos_hint: {"x": 0.5, 'y': 0.0}
-        size_hint: 0.5, 0.2
 
 MainWidget:
     BoxLayout:

@@ -23,10 +23,12 @@ from simplescn.scnrequest import Requester
 from simplescn.tools import logcheck
 from simplescn.tools.checks import check_hash
 from simplescn.config import isself
+from simplescn import pwrequester
+from simplescn.pwrequester.kivypw import pwcallmethod
 
 import chatscn
 from chatscn.chatkivy.nodes import ChatNode, ServerTreeNode, FriendTreeNode, ChatAvailTreeNode
-from chatscn.chatkivy.dialogs import PopupNew, PwDialog, FileDialog
+from chatscn.chatkivy.dialogs import PopupNew, FileDialog
 
 def genHandler(rootwidget, chatdirectory):
     class KivyHandler(chatscn.ChatHandler):
@@ -76,12 +78,6 @@ class MainWidget(FloatLayout):
             return
         chathist = self.ids["chathist"]
         chathist.add_widget(ChatNode(indict))
-
-    def pwhandler(self, msg):
-        dia = PwDialog(msg)
-        popup = PopupNew(title="Password Required", content=dia, size_hint=(0.9, 0.5))
-        popup.open()
-        return dia.pw()
 
     def set_namehash(self, text):
         splitted = text.rsplit("/", 1)
@@ -252,7 +248,8 @@ class ChatSCNApp(App):
     requester = None
 
     def on_start(self):
-        self.requester.p.keywords["pwhandler"] = self.root.pwhandler
+        self.requester.p.keywords["pwhandler"] = pwcallmethod
+        pwrequester.pwcallmethodinst = pwcallmethod
         self.root.pathchats = os.path.join(self.user_data_dir, "chats")
         os.makedirs(self.root.pathchats, mode=0o700, exist_ok=True)
         self.root.requester = chatscn.SCNSender(self.requester, self.root.pathchats)
@@ -270,9 +267,10 @@ class ChatSCNApp(App):
 
     def async_load(self, func, *args, **kwargs):
         # needed for kv file
-        threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True).start()
+        threading.Thread(target=func, args=args, kwargs=kwargs, daemon=False).start()
 
 def openchat(address, use_unix):
     bal = ChatSCNApp()
     bal.requester = Requester(addrcon=address, use_unix=use_unix)
     bal.run()
+    bal.stop()

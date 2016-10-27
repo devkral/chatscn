@@ -13,8 +13,9 @@ from kivy.core.image import Image as CoreImage
 from kivy.uix.floatlayout import FloatLayout
 
 from simplescn.tools import logcheck
+from simplescn.tools.checks import check_hash
 
-from chatkivy.dialogs import FileDialog, PopupNew, UseBubble, DeleteDialog, ListDialog, NameDialog
+from chatkivy.dialogs import FileDialog, PopupNew, UseBubble, DeleteDialog, ListDialog, NameDialog, DialogAdd
 from chatscn import messagebuffer, simplelock
 
 
@@ -87,8 +88,9 @@ class ChatNode(FloatLayout):
         elif indict["type"] == "image":
             #self.height = 100
             l = io.BytesIO(bytes(indict["image"], "utf-8"))
-            img = Image()
-            img.texture = CoreImage(source=l, size_hint=size, pos_hint=pos)
+            img = Image(size_hint=size, pos_hint=pos)
+            with img.canvas:
+                img.texture = CoreImage(source=l).texture
             self.add_widget(img)
         elif indict["type"] == "file":
             self.add_widget(FileEntry(indict, size_hint=size, pos_hint=pos))
@@ -127,10 +129,11 @@ class FriendTreeNode(UseBubble, Button):
         ret = root.requester.requester.do_request("/client/listhashes", {"name": self.text, "filter": "client"}, {})
         if not logcheck(ret):
             return
-        buttons = [("Load", self.load_hash), ("Close", lambda x: None)]
+        buttons = [("Load", self.load_hash), \
+                    ("Add", self.add_hash), ("Reload", self.reload_hashes), \
+                    ("Close", lambda x: None)]
         newlist = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (1, 1, 1, 1)), ret[2]["items"])
         dia = ListDialog(entries=newlist, buttons=buttons)
-
         PopupNew(title="Hashes", content=dia).open()
 
 
@@ -142,6 +145,25 @@ class FriendTreeNode(UseBubble, Button):
         root.ids["screenman"].current = "chats"
         root.ids["chatbutton"].state = "down"
         root.ids["serverbutton"].state = "normal"
+
+    def reload_hashes(self, selection):
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/listhashes", {"name": self.text, "filter": "client"}, {})
+        if not logcheck(ret):
+            return False
+        self.entries = map(lambda entry: (entry[0], (1, 0, 0, 1) if entry[4] == "valid" else (1, 1, 1, 1)), ret[2]["items"])
+        return True
+
+    def add_hash(self, selection):
+        dia = DialogAdd(func=self.add_hash_afterask, check_func=check_hash)
+        PopupNew(title="Add new", content=dia, size_hint=(0.9, 0.5)).open()
+        return True
+
+    def add_hash_afterask(self, _hash):
+        root = App.get_running_app().root
+        ret = root.requester.requester.do_request("/client/addhash", {"name":self.text, "hash": _hash, "type":"client"}, {})
+        if logcheck(ret):
+            self.reload_hashes(None)
 
     def delete_friend(self):
         buttonlist = [("Delete", self.delete_friend_afterask), ("Cancel", lambda: None)]

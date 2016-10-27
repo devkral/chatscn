@@ -163,6 +163,16 @@ def loadfromdir(basedir, func, data=None):
             ret.append(_loadfromdir(fpath, func, data))
     return ret
 
+def loadfromsocket(sock, size):
+    countread = 0
+    data = b""
+    while countread <= size-1024:
+        _data = sock.recv(1024)
+        data += _data
+        countread += len(_data)
+    data += sock.recv(size-countread)
+    return data
+
 # TODO: max request size
 class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
     forcehash = None
@@ -212,7 +222,9 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             return
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
-            ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            data = loadfromsocket(self.connection, int(retlen))
+            ret = json.loads(str(data, "utf-8"))
+            print("datalen", retlen)
             self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 0
@@ -227,7 +239,8 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             return
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
-            ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            data = loadfromsocket(self.connection, int(retlen))
+            ret = json.loads(str(data, "utf-8"))
             self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 1
@@ -244,7 +257,8 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             return
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
-            ret = json.loads(str(self.rfile.read(int(retlen)), "utf-8"))
+            data = loadfromsocket(self.connection, int(retlen))
+            ret = json.loads(str(data, "utf-8"))
             self.send_response(200)
             ret["type"] = send_type
             ret["sensitivity"] = 2
