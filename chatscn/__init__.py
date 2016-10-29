@@ -97,7 +97,7 @@ class SCNSender(object):
         con = client.HTTPConnection(*scnparse_url(respw[2].get("address", self.cur_address)))
         con.sock = respw[0].sock
         respw[0].sock = None
-        ob = bytes(json.dumps(body),"utf-8")
+        ob = bytes(json.dumps(body), "utf-8")
         con.putrequest("POST", path)
         con.putheader("Content-Length", str(len(ob)))
         con.putheader("Content-Type", "application/json")
@@ -222,13 +222,13 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             return
         retlen = self.headers.get("Content-Length", "")
         if retlen.isdigit():
-            data = loadfromsocket(self.connection, int(retlen))
+            data = self.rfile.read(int(retlen))
             ret = json.loads(str(data, "utf-8"))
-            print("datalen", retlen)
             self.send_response(200)
+            self.end_headers()
+            self.wfile.flush()
             ret["type"] = send_type
             ret["sensitivity"] = 0
-            self.end_headers()
             self.notify(writeStuff(self.basedir, self.certtupel[1], ret, False, writedisk=True))
         else:
             self.send_error(411)
@@ -242,6 +242,8 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             data = loadfromsocket(self.connection, int(retlen))
             ret = json.loads(str(data, "utf-8"))
             self.send_response(200)
+            self.end_headers()
+            self.wfile.flush()
             ret["type"] = send_type
             ret["sensitivity"] = 1
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))
@@ -260,6 +262,8 @@ class ChatHandler(server.BaseHTTPRequestHandler, metaclass=abc.ABCMeta):
             data = loadfromsocket(self.connection, int(retlen))
             ret = json.loads(str(data, "utf-8"))
             self.send_response(200)
+            self.end_headers()
+            self.wfile.flush()
             ret["type"] = send_type
             ret["sensitivity"] = 2
             self.notify(writeStuff(self.basedir, str(self.certtupel[1]), ret, False, writedisk=False))

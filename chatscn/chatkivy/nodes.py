@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import io
+import tempfile
 import os
 import shutil
 
@@ -9,8 +9,8 @@ from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
-from kivy.core.image import Image as CoreImage
 from kivy.uix.floatlayout import FloatLayout
+from kivy.graphics import Color, Rectangle
 
 from simplescn.tools import logcheck
 from simplescn.tools.checks import check_hash
@@ -76,27 +76,37 @@ class ChatNode(FloatLayout):
         if indict["owner"]:
             size = (0.6, 1)
             pos = {"x": 0.2, "y":0}
-            #self.add_widget(Label(text="self", size_hint=(0.05, 1), pos_hint={"x": 0, "y":0}))
         else:
             size = (0.6, 1)
             pos = {"x": 0, "y":0}
+        if int(indict["number"]) % 2 == 0:
+            c = (0.5, 0.5, 0.5, 1)
+        else:
+            c = (0.3, 0.3, 0.3, 1)
+        with self.canvas.before:
+            Color(*c)
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+        self.bind(on_pos=self.update_rect, on_size=self.update_rect)
         if indict["type"] == "text":
-            #self.height = 30*(indict["text"].count("\n")+1)
             l = Label(text=indict["text"], size_hint=size, pos_hint=pos, halign='left')
+            #, outline_color=c
+            def resize(inst):
+                inst.text_size = inst.size
+            l.bind(on_size=resize)
             self.add_widget(l)
-            l.texture_update()
         elif indict["type"] == "image":
-            #self.height = 100
-            l = io.BytesIO(bytes(indict["image"], "utf-8"))
-            img = Image(size_hint=size, pos_hint=pos)
-            with img.canvas:
-                img.texture = CoreImage(source=l).texture
+            self.height = 100
+            with tempfile.NamedTemporaryFile() as tfile:
+                tfile.write(bytes(indict["image"], "utf-8"))
+                img = Image(source=tfile.name, size_hint=size, pos_hint=pos, allow_stretch=True, keep_data=True)
             self.add_widget(img)
         elif indict["type"] == "file":
             self.add_widget(FileEntry(indict, size_hint=size, pos_hint=pos))
         else:
             raise
-
+    def update_rect(self, instance):
+        self.rect.pos = instance.pos
+        self.rect.size = instance.size
 class FriendTreeNode(UseBubble, Button):
     def __init__(self, name, *args, **kwargs):
         super().__init__(*args, **kwargs)

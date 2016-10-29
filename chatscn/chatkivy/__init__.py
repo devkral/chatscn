@@ -238,10 +238,10 @@ class MainWidget(FloatLayout):
                 jp = os.path.join(p, "{}.json".format(num))
                 if os.path.exists(jp):
                     with open(jp, "r") as ro:
-                        try:
+                        #try:
                             wid.add_widget(ChatNode(json.load(ro)))
-                        except Exception:
-                            logging.error("%s caused error", jp)
+                        #except Exception:
+                        #    logging.error("%s caused error", jp)
 
 
 class ChatSCNApp(App):
