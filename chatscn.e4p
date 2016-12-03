@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-5.1.dtd">
 <!-- eric project file for project chatscn -->
-<!-- Saved: 2016-10-17, 16:39:42 -->
+<!-- Saved: 2016-12-03, 15:47:40 -->
 <!-- Copyright (C) 2016 alex,  -->
 <Project version="5.1">
   <Language>en_US</Language>
   <Hash>492b5d9ec5014adb07cf18907d0cdb709f1decec</Hash>
   <ProgLanguage mixed="0">Python3</ProgLanguage>
   <ProjectType>Console</ProjectType>
-  <Description></Description>
   <Version>0.1</Version>
   <Author>alex</Author>
   <Email></Email>
-  <Eol index="-1"/>
   <Sources>
     <Source>chatscn/__init__.py</Source>
     <Source>chatscn/__main__.py</Source>
@@ -20,6 +18,7 @@
     <Source>chatscn/chatkivy/chatscn.kv</Source>
     <Source>chatscn/chatkivy/dialogs.py</Source>
     <Source>chatscn/chatkivy/nodes.py</Source>
+    <Source>chatscn/chatqt5/__init__.py</Source>
   </Sources>
   <Forms/>
   <Translations/>
@@ -131,9 +130,6 @@
         </value>
       </dict>
     </VcsOptions>
-    <VcsOtherData>
-      <dict/>
-    </VcsOtherData>
   </Vcs>
   <FiletypeAssociations>
     <FiletypeAssociation pattern="*.idl" type="INTERFACES"/>

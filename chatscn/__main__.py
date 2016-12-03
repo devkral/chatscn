@@ -17,8 +17,11 @@ def openfoo(modulename, address, use_unix):
     #    return False
 
 def open_gui(address, use_unix):
-    if openfoo("chatkivy", address, use_unix):
+    if openfoo("chatqt5", address, use_unix):
         return
+    # don't try to import
+    #if openfoo("chatkivy", address, use_unix):
+    #    return
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
